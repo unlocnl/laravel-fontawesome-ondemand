@@ -1,0 +1,8 @@
+/vendor/
+/node_modules/
+composer.lock
+.phpunit.result.cache
+.phpunit.cache/
+/.superpowers/
+/docs/
+.idea

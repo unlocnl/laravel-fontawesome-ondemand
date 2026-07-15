@@ -1,0 +1,44 @@
+{
+    "name": "unloc/laravel-fontawesome-ondemand",
+    "description": "Fetch Font Awesome icons on demand from the GraphQL API and cache them to disk.",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "illuminate/console": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/contracts": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/http": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/support": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/view": "^11.0 || ^12.0 || ^13.0",
+        "spatie/laravel-package-tools": "^1.16"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^9.0 || ^10.0 || ^11.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0"
+    },
+    "autoload": {
+        "psr-4": { "Unloc\\FontAwesome\\": "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "Unloc\\FontAwesome\\Tests\\": "tests/" }
+    },
+    "extra": {
+        "laravel": {
+            "providers": ["Unloc\\FontAwesome\\FontAwesomeServiceProvider"],
+            "aliases": { "FontAwesome": "Unloc\\FontAwesome\\Facades\\FontAwesome" }
+        }
+    },
+    "scripts": {
+        "update-brands": "@php bin/update-brands.php",
+        "test": "@php vendor/bin/pest"
+    },
+    "scripts-descriptions": {
+        "update-brands": "Regenerate resources/brands.php from the Font Awesome public GraphQL metadata (no token needed). Pass a release line, e.g. `composer update-brands -- 6.x`."
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": { "pestphp/pest-plugin": true }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
