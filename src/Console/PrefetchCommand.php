@@ -71,7 +71,7 @@ class PrefetchCommand extends Command
                     $found[] = array_filter([
                         'name' => $attrs['name'],
                         'family' => $attrs['family'] ?? null,
-                        'style' => $attrs['style'] ?? null,
+                        'style' => $attrs['variant'] ?? null,
                     ], fn ($v) => $v !== null);
                 }
             }

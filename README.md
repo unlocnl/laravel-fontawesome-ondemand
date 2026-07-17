@@ -1,4 +1,4 @@
-# Laravel Font Awesome On-Demand
+# Font Awesome On-Demand for Laravel
 
 Fetches Font Awesome 6 and 7 icons on demand from the official Font Awesome GraphQL API, caches them disk-first, and renders them through a `<x-fa>` Blade component.
 
@@ -27,8 +27,8 @@ All keys live in `config/fontawesome.php`.
 | `version` | Font Awesome release series to query, `6` or `7`. Used verbatim in the GraphQL `release(version: "{version}.x")` query. |
 | `api_token` | Reads `FONTAWESOME_API_TOKEN`. Required to fetch any SVG — the GraphQL `svgs` field is authenticated even for free icons. The client exchanges it for a short-lived GraphQL token and caches that exchange. A free-tier token covers free icons; a Pro token adds Pro families/styles. |
 | `endpoint` | Font Awesome GraphQL endpoint. Override for testing/mocking. |
-| `defaults.family` | Default family (`classic`, `sharp`, `sharp-duotone`, `duotone`) applied when `<x-fa>` doesn't specify one. Note: `brands` is a *style*, not a family. |
-| `defaults.style` | Default style (`solid`, `regular`, `light`, `thin`, `semibold`, `duotone`, `brands`) applied when `<x-fa>` doesn't specify one. |
+| `defaults.family` | Default family (`classic`, `sharp`, `sharp-duotone`, `duotone`) applied when `<x-fa>`'s `family` attribute is omitted. Note: `brands` is a *style*, not a family. |
+| `defaults.style` | Default style (`solid`, `regular`, `light`, `thin`, `semibold`, `duotone`, `brands`) applied when `<x-fa>`'s `variant` attribute is omitted. |
 | `classes` | CSS classes merged into every rendered `<svg>` by default (e.g. sizing utility classes). Component/attribute classes are appended, not replaced. |
 | `prefetch` | List of icons to always warm via `fontawesome:prefetch`. Each entry is a string (icon name, uses defaults) or an array `['name' => ..., 'family' => ..., 'style' => ...]`. |
 | `scan_paths` | Extra directories (beyond `resource_path('views')`) that `fontawesome:prefetch` scans for `<x-fa>` usages. |
@@ -48,11 +48,11 @@ All keys live in `config/fontawesome.php`.
 
 ```blade
 <x-fa name="gear" />
-<x-fa name="heart" family="sharp" style="solid" class="text-red-500" />
+<x-fa name="heart" family="sharp" variant="solid" class="text-red-500" />
 <x-fa name="github" /> {{-- brand auto-resolved --}}
 ```
 
-`name` is required; `family` and `style` fall back to `defaults.family`/`defaults.style` when omitted. Any other attributes (including `class`) are merged onto the rendered `<svg>` root element — default classes, existing SVG classes, and attribute classes are combined and deduplicated.
+`name` is required; `family` and `variant` fall back to `defaults.family`/`defaults.style` when omitted. Any other attributes (including `class` and `style`) are merged onto the rendered `<svg>` root element — default classes, existing SVG classes, and attribute classes are combined and deduplicated.
 
 Brand icons (`github`, `square-github`, `gitlab`, `google`, `php`, `laravel`, ...) are recognized from the complete bundled brand list in `resources/brands.php` — all Font Awesome brand names, including the `square-*` variants — and resolved directly against the classic family with the `brands` style (`classic`/`brands`) in a single query, without needing to pass a family or style. Any name not in the list (e.g. a brand added in a newer release) still resolves via an automatic `classic`/`brands` fallback — just with one extra request on first fetch. The list is a first-fetch optimization only. Regenerate it against the latest release with:
 
@@ -72,7 +72,7 @@ FontAwesome::render('gear'); // Illuminate\Support\HtmlString, ready to echo
 FontAwesome::get('gear');    // raw sanitized SVG markup, or null if not found
 ```
 
-`render()` accepts the same `name`, `family`, `style`, plus an attributes array/`ComponentAttributeBag` for merging — it's what `<x-fa>` calls under the hood. `get()` returns the sanitized SVG string (or `null`) without attribute merging, useful for programmatic checks.
+`render()` accepts `name`, `family`, `style` (the `<x-fa>` `variant` attribute maps to this parameter), plus an attributes array/`ComponentAttributeBag` for merging — it's what `<x-fa>` calls under the hood. `get()` returns the sanitized SVG string (or `null`) without attribute merging, useful for programmatic checks.
 
 ### Commands
 
