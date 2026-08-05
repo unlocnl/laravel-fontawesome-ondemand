@@ -41,6 +41,7 @@ All keys live in `config/fontawesome.php`.
 | `cache.negative_ttl` | TTL in seconds for negative (icon-not-found) cache entries, so failed lookups aren't retried on every request. |
 | `cache.prefix` | Key prefix used for all persistent cache entries, to avoid collisions with other cached data. |
 | `on_error` | Behavior when an icon can't be resolved: `placeholder` (render a fallback SVG), `throw` (throw `IconNotFoundException`), or `empty` (render nothing). |
+| `blaze.fold` | Register `<x-fa>` with Livewire Blaze for compile-time folding. Defaults to `true` and is ignored when Blaze isn't installed. See [Livewire Blaze](#livewire-blaze). |
 
 ## Usage
 
@@ -79,15 +80,38 @@ FontAwesome::get('gear');    // raw sanitized SVG markup, or null if not found
 ```bash
 php artisan fontawesome:prefetch
 php artisan fontawesome:clear
+php artisan fontawesome:clear --views
 ```
 
 `fontawesome:prefetch` warms the cache for everything in `config('fontawesome.prefetch')` plus every static `<x-fa>` usage found by scanning `resource_path('views')` and any `scan_paths`. Usages with dynamic bindings (e.g. `:name="$icon"` or `{{ $var }}` interpolation) are skipped and counted, since the icon name can't be determined statically.
 
-`fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`).
+`fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`). It leaves compiled Blade views untouched; pass `--views` to also run `view:clear`, which is what you want when Blaze has folded icons into them (see below).
+
+## Livewire Blaze
+
+When [Livewire Blaze](https://github.com/livewire/blaze) is installed, this package registers `<x-fa>` for compile-time folding. A statically named usage compiles to the literal SVG in the parent template:
+
+```blade
+<x-fa name="gear" class="text-red-500" />
+```
+
+```php
+<?php ob_start(); ?><svg viewBox="0 0 1 1" class="fill-current w-[1em] h-[1em] text-red-500"><path/></svg>
+```
+
+No component render, no cache lookup, no disk read at runtime. Usages with a dynamically bound `name`, `family`, or `variant` (e.g. `:name="$icon"`) are left alone by Blaze and resolve at runtime as usual.
+
+Set `blaze.fold` to `false` to opt out. Because the registration targets the component file exactly, and exact-file matches always win in Blaze's path resolution, this config key — not `Blaze::optimize()->in(...)` on a parent directory — is how you turn it off.
+
+An icon that can't be resolved is never folded. During a fold the package ignores `on_error` and throws, so Blaze falls back to emitting the unfolded component and your configured `on_error` applies at runtime instead. A transient API failure at build time therefore costs you the optimisation for that icon, not a placeholder baked into the page. (If you've turned on Blaze's own throw mode with `Blaze::throw()`, it rethrows instead of falling back — which is what you want while debugging.)
+
+Run `fontawesome:prefetch` before `view:cache` so folding has a warm cache to read from. Without it, compilation still works, but it resolves icons over the network from inside the Blade compiler.
+
+Compiled views are invalidated by the mtime of the component file, so clearing the icon cache or changing `fontawesome.*` config does not refresh already-folded output. That is what `fontawesome:clear --views` is for.
 
 ## Notes
 
-- `<x-fa>` is registered as an anonymous component, so it's compatible with Livewire Blaze.
+- `<x-fa>` is registered as an anonymous component, which is what makes Blaze folding possible.
 - Rendering happens server-side to plain SVG markup, so Inertia/Vue/React front ends can consume the output directly (e.g. via `v-html` or `dangerouslySetInnerHTML`) without a JS-side Font Awesome dependency.
 - Resolution order is: in-memory request cache → persistent cache (`cache.store`) → disk cache (`disk`/`path`) → GraphQL API. A successful API fetch is sanitized once and written back to both the disk cache and the persistent cache.
 

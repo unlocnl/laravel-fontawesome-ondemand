@@ -2,6 +2,7 @@
 
 namespace Unloc\FontAwesome;
 
+use Closure;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\ComponentAttributeBag;
 use Unloc\FontAwesome\Exceptions\IconNotFoundException;
@@ -30,6 +31,7 @@ class FontAwesome
         private array $brands,
         private string $onError,
         private string $placeholderPath,
+        private ?Closure $isFolding = null,
     ) {}
 
     public function get(string $name, ?string $family = null, ?string $style = null): ?string
@@ -100,7 +102,11 @@ class FontAwesome
 
     private function handleMissing(string $name): string
     {
-        return match ($this->onError) {
+        // A miss during a Blaze fold would be baked into the compiled view forever,
+        // so throw and let Blaze fall back to the runtime path.
+        $onError = $this->isFolding && ($this->isFolding)() ? 'throw' : $this->onError;
+
+        return match ($onError) {
             'throw' => throw new IconNotFoundException("Font Awesome icon [{$name}] could not be resolved."),
             'empty' => '',
             default => (string) file_get_contents($this->placeholderPath),

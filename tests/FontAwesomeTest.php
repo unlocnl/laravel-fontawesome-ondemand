@@ -11,7 +11,7 @@ use Unloc\FontAwesome\Support\IconStore;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
-function manager(string $onError = 'placeholder', array $brands = []): FontAwesome
+function manager(string $onError = 'placeholder', array $brands = [], ?Closure $isFolding = null): FontAwesome
 {
     Storage::fake('local');
 
@@ -27,6 +27,7 @@ function manager(string $onError = 'placeholder', array $brands = []): FontAweso
         brands: $brands,
         onError: $onError,
         placeholderPath: __DIR__ . '/../resources/svg/placeholder.svg',
+        isFolding: $isFolding,
     );
 }
 
@@ -121,6 +122,22 @@ it('throws when on_error is throw', function () {
 it('renders empty when on_error is empty', function () {
     fakeMissing();
     expect((string) manager('empty')->render('nope', 'classic', 'solid'))->toBe('');
+});
+
+it('throws on a miss while folding, whatever on_error says', function (string $onError) {
+    fakeMissing();
+    expect(fn () => manager($onError, isFolding: fn () => true)->render('nope', 'classic', 'solid'))
+        ->toThrow(IconNotFoundException::class);
+})->with(['placeholder', 'empty']);
+
+it('honours on_error once folding has finished', function () {
+    fakeMissing();
+    $folding = false;
+    $manager = manager('empty', isFolding: function () use (&$folding) {
+        return $folding;
+    });
+
+    expect((string) $manager->render('nope', 'classic', 'solid'))->toBe('');
 });
 
 it('merges default classes and bag class into a hit', function () {

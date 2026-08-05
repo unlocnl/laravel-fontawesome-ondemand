@@ -75,11 +75,19 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             brands: require __DIR__ . '/../resources/brands.php',
             onError: (string) $config('on_error', 'placeholder'),
             placeholderPath: __DIR__ . '/../resources/svg/placeholder.svg',
+            isFolding: fn () => $this->app->bound('blaze') && $this->app->make('blaze')->isFolding(),
         ));
     }
 
     public function packageBooted(): void
     {
         Blade::anonymousComponentPath(__DIR__ . '/../resources/views/components');
+
+        if ($this->app['config']->get('fontawesome.blaze.fold', true) && $this->app->bound('blaze')) {
+            $this->app->make('blaze')->optimize()->in(
+                __DIR__ . '/../resources/views/components/fa.blade.php',
+                fold: true,
+            );
+        }
     }
 }

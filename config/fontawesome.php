@@ -30,4 +30,9 @@ return [
         'prefix'       => 'fa_ondemand:',
     ],
     'on_error' => 'placeholder',
+    'blaze' => [
+        // Fold <x-fa> at compile time when livewire/blaze is installed, baking the
+        // SVG into the compiled parent. Ignored without Blaze.
+        'fold' => true,
+    ],
 ];
