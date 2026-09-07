@@ -1,8 +1,10 @@
 # Font Awesome On-Demand for Laravel
 
-Fetches Font Awesome 6 and 7 icons on demand from the official Font Awesome GraphQL API, caches them disk-first, and renders them through a `<x-fa>` Blade component.
+Fetches Font Awesome 6 and 7 icons on demand, caches them disk-first, and renders them through a `<x-fa>` Blade component.
 
-> **An API token is required.** The Font Awesome GraphQL `svgs` field is authenticated even for free icons, so an `FONTAWESOME_API_TOKEN` must be set to fetch any SVG markup — without one, every icon falls back to `on_error`. A free-tier token covers the free icon set; a Pro token additionally unlocks Pro families and styles.
+Icons come from two places. The free set is pulled unauthenticated from the `@fortawesome/fontawesome-free` npm package on jsDelivr; everything else comes from the official Font Awesome GraphQL API, whose `svgs` field is authenticated even for free icons. Out of the box, with no `FONTAWESOME_API_TOKEN`, the free set works and nothing else does. Set a token to unlock Pro families and styles.
+
+The free package carries the `classic` family only. `sharp`, `duotone`, `sharp-duotone` and the `light` / `thin` / `semibold` styles need a Pro token.
 
 ## Requirements
 
@@ -24,9 +26,11 @@ All keys live in `config/fontawesome.php`.
 
 | Key | Description |
 |-|-|
-| `version` | Font Awesome release series to query, `6` or `7`. Used verbatim in the GraphQL `release(version: "{version}.x")` query. |
-| `api_token` | Reads `FONTAWESOME_API_TOKEN`. Required to fetch any SVG — the GraphQL `svgs` field is authenticated even for free icons. The client exchanges it for a short-lived GraphQL token and caches that exchange. A free-tier token covers free icons; a Pro token adds Pro families/styles. |
+| `version` | Font Awesome release series, `6` or `7`. Used verbatim in the GraphQL `release(version: "{version}.x")` query and as the CDN package specifier `fontawesome-free@{version}`. Also namespaces the disk and cache keys. |
+| `source` | Reads `FONTAWESOME_SOURCE`. `auto` (default) serves free icons from the CDN and sends everything else — plus any CDN miss — to the GraphQL API when a token is set, and inverts that order for `fontawesome:prefetch` (see [Commands](#commands)); `cdn` uses jsDelivr only; `api` uses the GraphQL API only. An unrecognized value throws. |
+| `api_token` | Reads `FONTAWESOME_API_TOKEN`. Unlocks Pro families and styles, and lets `auto` fall through to the API for icons the free package lacks. The client exchanges it for a short-lived GraphQL token and caches that exchange. Without a token the API leg is skipped entirely. |
 | `endpoint` | Font Awesome GraphQL endpoint. Override for testing/mocking. |
+| `cdn_endpoint` | npm CDN root the free package is fetched from. Requests go to `{cdn_endpoint}/@fortawesome/fontawesome-free@{version}/svgs/{style}/{name}.svg`. |
 | `defaults.family` | Default family (`classic`, `sharp`, `sharp-duotone`, `duotone`) applied when `<x-fa>`'s `family` attribute is omitted. Note: `brands` is a *style*, not a family. |
 | `defaults.style` | Default style (`solid`, `regular`, `light`, `thin`, `semibold`, `duotone`, `brands`) applied when `<x-fa>`'s `variant` attribute is omitted. |
 | `classes` | CSS classes merged into every rendered `<svg>` by default (e.g. sizing utility classes). Component/attribute classes are appended, not replaced. |
@@ -90,7 +94,7 @@ resources/fa-custom-icons/
     └── logo.svg        # c-logo variant="regular"
 ```
 
-Family is ignored for custom icons — `sharp` and `duotone` are Font Awesome's axes, not yours.
+Family is ignored for custom icons.
 
 #### From a database or an upload
 
@@ -145,7 +149,7 @@ php artisan fontawesome:clear --views
 
 `fontawesome:prefetch` warms the cache for everything in `config('fontawesome.prefetch')` plus every static `<x-fa>` usage found by scanning `resource_path('views')` and any `scan_paths`. Usages with dynamic bindings (e.g. `:name="$icon"` or `{{ $var }}` interpolation) are skipped and counted, since the icon name can't be determined statically.
 
-The whole set is fetched in a single GraphQL request (plus at most one more for brand fallbacks), so warming several hundred icons costs two requests rather than several hundred.
+Warming runs in two phases — the requested icons, then brand fallbacks. On `api`, and on `auto` with a token, each phase is one batched GraphQL request, so several hundred icons cost two requests rather than several hundred; whatever the API doesn't answer falls back to the CDN. Without a token — `auto` with none, or `cdn` — every icon is its own CDN request, issued concurrently in waves of at most 25.
 
 `fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`). It leaves compiled Blade views untouched; pass `--views` to also run `view:clear`, which is what you want when Blaze has folded icons into them (see below).
 
@@ -175,7 +179,7 @@ Compiled views are invalidated by the mtime of the component file, so clearing t
 
 - `<x-fa>` is registered as an anonymous component, which is what makes Blaze folding possible.
 - Rendering happens server-side to plain SVG markup, so Inertia/Vue/React front ends can consume the output directly (e.g. via `v-html` or `dangerouslySetInnerHTML`) without a JS-side Font Awesome dependency.
-- Resolution order is: in-memory request cache → persistent cache (`cache.store`) → disk cache (`disk`/`path`) → GraphQL API. A successful API fetch is sanitized once and written back to both the disk cache and the persistent cache.
+- Resolution order is: in-memory request cache → persistent cache (`cache.store`) → disk cache (`disk`/`path`) → API. A successful API fetch is sanitized once and written back to both the disk cache and the persistent cache.
 
 ## License
 

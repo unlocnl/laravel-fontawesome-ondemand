@@ -9,7 +9,10 @@ use Illuminate\Support\Facades\Storage;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Unloc\FontAwesome\Console;
+use Unloc\FontAwesome\Contracts\IconFetcher;
 use Unloc\FontAwesome\Http\FontAwesomeClient;
+use Unloc\FontAwesome\Http\IconFetcherChain;
+use Unloc\FontAwesome\Http\JsDelivrClient;
 use Unloc\FontAwesome\Support\FilesystemIconSource;
 use Unloc\FontAwesome\Support\IconCache;
 use Unloc\FontAwesome\Support\IconSourceChain;
@@ -58,6 +61,25 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             $config('version', 7),
         ));
 
+        $this->app->singleton(JsDelivrClient::class, fn ($app) => new JsDelivrClient(
+            $app->make(HttpFactory::class),
+            (string) $config('cdn_endpoint', 'https://cdn.jsdelivr.net/npm'),
+            $config('version', 7),
+        ));
+
+        $this->app->singleton(IconFetcher::class, function ($app) use ($config) {
+            $source = (string) $config('source', 'auto');
+
+            return match ($source) {
+                'api' => $app->make(FontAwesomeClient::class),
+                'cdn' => $app->make(JsDelivrClient::class),
+                'auto' => $config('api_token')
+                    ? new IconFetcherChain([$app->make(JsDelivrClient::class), $app->make(FontAwesomeClient::class)])
+                    : $app->make(JsDelivrClient::class),
+                default => throw new \InvalidArgumentException("Unknown Font Awesome source [{$source}]."),
+            };
+        });
+
         $this->app->singleton(IconSourceChain::class, fn () => new IconSourceChain([
             new FilesystemIconSource($config('custom.path')),
         ]));
@@ -72,7 +94,7 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
         $this->app->singleton(FontAwesome::class, fn ($app) => new FontAwesome(
             store: $app->make(IconStore::class),
             cache: $app->make(IconCache::class),
-            client: $app->make(FontAwesomeClient::class),
+            client: $app->make(IconFetcher::class),
             sources: $app->make(IconSourceChain::class),
             sanitizer: $app->make(SvgSanitizer::class),
             merger: $app->make(SvgAttributeMerger::class),
@@ -83,6 +105,12 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             onError: (string) $config('on_error', 'placeholder'),
             placeholderPath: __DIR__ . '/../resources/svg/placeholder.svg',
             isFolding: fn () => $this->app->bound('blaze') && $this->app->make('blaze')->isFolding(),
+            // Warming is request-count bound, not latency bound, so it prefers the one
+            // batched GraphQL document over a request per icon. The CDN stays behind it
+            // to keep free icons warmable when the API is unreachable.
+            warmClient: $config('source', 'auto') === 'auto' && $config('api_token')
+                ? new IconFetcherChain([$app->make(FontAwesomeClient::class), $app->make(JsDelivrClient::class)])
+                : null,
         ));
     }
 

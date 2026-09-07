@@ -6,10 +6,11 @@ use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
+use Unloc\FontAwesome\Contracts\IconFetcher;
 use Unloc\FontAwesome\Exceptions\IconFetchFailedException;
 use Unloc\FontAwesome\Support\IconReference;
 
-class FontAwesomeClient
+class FontAwesomeClient implements IconFetcher
 {
     // Font Awesome GraphQL `Family` enum. "brands" is NOT a family — brand
     // icons are the classic family under the "brands" style.
@@ -41,23 +42,12 @@ class FontAwesomeClient
         private int $maxRetryDelay = 5000,
     ) {}
 
-    /**
-     * @throws IconFetchFailedException when the request could not be completed;
-     *                                  a null return means the icon does not exist.
-     */
     public function fetch(IconReference $ref): ?string
     {
         return $this->fetchMany([$ref])[$ref->key()] ?? null;
     }
 
-    /**
-     * Resolves every reference in a single aliased GraphQL document.
-     *
-     * @param  iterable<IconReference>  $refs
-     * @return array<string,?string> keyed by IconReference::key(); null means the icon does not exist
-     *
-     * @throws IconFetchFailedException
-     */
+    /** Resolves every reference in a single aliased GraphQL document. */
     public function fetchMany(iterable $refs): array
     {
         $unique = [];

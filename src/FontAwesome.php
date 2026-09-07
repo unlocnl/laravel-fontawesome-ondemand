@@ -7,9 +7,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\ComponentAttributeBag;
 use Unloc\FontAwesome\Contracts\CustomIconSource;
+use Unloc\FontAwesome\Contracts\IconFetcher;
 use Unloc\FontAwesome\Exceptions\IconFetchFailedException;
 use Unloc\FontAwesome\Exceptions\IconNotFoundException;
-use Unloc\FontAwesome\Http\FontAwesomeClient;
 use Unloc\FontAwesome\Support\IconCache;
 use Unloc\FontAwesome\Support\IconReference;
 use Unloc\FontAwesome\Support\IconSourceChain;
@@ -26,7 +26,7 @@ class FontAwesome
     public function __construct(
         private IconStore $store,
         private IconCache $cache,
-        private FontAwesomeClient $client,
+        private IconFetcher $client,
         private IconSourceChain $sources,
         private SvgSanitizer $sanitizer,
         private SvgAttributeMerger $merger,
@@ -37,6 +37,7 @@ class FontAwesome
         private string $onError,
         private string $placeholderPath,
         private ?Closure $isFolding = null,
+        private ?IconFetcher $warmClient = null,
     ) {}
 
     public function get(string $name, ?string $family = null, ?string $style = null): ?string
@@ -96,7 +97,7 @@ class FontAwesome
             }
 
             try {
-                $fetched = $this->client->fetchMany($pending);
+                $fetched = ($this->warmClient ?? $this->client)->fetchMany($pending);
             } catch (IconFetchFailedException $e) {
                 Log::warning("[fontawesome] batch fetch failed: {$e->getMessage()}");
 

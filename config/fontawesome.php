@@ -2,13 +2,20 @@
 
 return [
     'version' => 7,
-    // Required to fetch SVG markup: the Font Awesome GraphQL `svgs` field is
-    // authenticated even for free icons. Without a token every icon falls back
-    // to `on_error`. A free-tier token works for free icons; Pro token unlocks
-    // Pro families/styles. Icon metadata (names/unicode) is public, but this
-    // package needs the SVG.
+    // Where SVG markup comes from.
+    //   'auto' free icons (classic solid/regular/brands) from the jsDelivr CDN, everything
+    //          else — and any CDN miss — from the GraphQL API when a token is configured.
+    //          `fontawesome:prefetch` inverts this: with a token it warms through one
+    //          batched GraphQL document rather than a request per icon
+    //   'cdn'  jsDelivr only: no token, free icons only
+    //   'api'  GraphQL only
+    'source' => env('FONTAWESOME_SOURCE', 'auto'),
+    // Unlocks Pro families and styles, and lets 'auto' fall through to the API for icons
+    // the free package lacks. The GraphQL `svgs` field is authenticated even for free
+    // icons, so without a token the API leg is skipped entirely.
     'api_token' => env('FONTAWESOME_API_TOKEN'),
     'endpoint' => 'https://api.fontawesome.com',
+    'cdn_endpoint' => 'https://cdn.jsdelivr.net/npm',
     'defaults' => [
         'family' => 'classic',
         'style'  => 'solid',
