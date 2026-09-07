@@ -153,6 +153,8 @@ Warming runs in two phases — the requested icons, then brand fallbacks. On `ap
 
 `fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`). It leaves compiled Blade views untouched; pass `--views` to also run `view:clear`, which is what you want when Blaze has folded icons into them (see below).
 
+> **Deploy tip:** run `fontawesome:prefetch` as its own deploy step to keep used icons up to date.
+
 ## Livewire Blaze
 
 When [Livewire Blaze](https://github.com/livewire/blaze) is installed, this package registers `<x-fa>` for compile-time folding. A statically named usage compiles to the literal SVG in the parent template:
