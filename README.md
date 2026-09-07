@@ -34,6 +34,9 @@ All keys live in `config/fontawesome.php`.
 | `defaults.family` | Default family (`classic`, `sharp`, `sharp-duotone`, `duotone`) applied when `<x-fa>`'s `family` attribute is omitted. Note: `brands` is a *style*, not a family. |
 | `defaults.style` | Default style (`solid`, `regular`, `light`, `thin`, `semibold`, `duotone`, `brands`) applied when `<x-fa>`'s `variant` attribute is omitted. |
 | `classes` | CSS classes merged into every rendered `<svg>` by default (e.g. sizing utility classes). Component/attribute classes are appended, not replaced. |
+| `mode` | How icons render by default: `inline` (the SVG markup at every usage) or `linked` (a `<use>` reference to a cacheable per-icon URL). Defaults to `inline`; override per usage with the `mode` attribute. An unknown value throws. See [Linked icons](#linked-icons). |
+| `linked.prefix` | URL prefix the icon route answers on. `null` removes the route, and `linked` usages fall back to inlining. |
+| `linked.max_age` | `max-age` in seconds sent with each served icon, alongside `public` and `immutable`. |
 | `custom.path` | Directory the bundled filesystem source reads app-owned SVGs from. Style subfolders act as variants; root-level files answer any style. `null` disables it. See [Custom icons](#custom-icons). |
 | `prefetch` | List of icons to always warm via `fontawesome:prefetch`. Each entry is a string (icon name, uses defaults) or an array `['name' => ..., 'family' => ..., 'style' => ...]`. |
 | `scan_paths` | Extra directories (beyond `resource_path('views')`) that `fontawesome:prefetch` scans for `<x-fa>` usages. |
@@ -68,6 +71,24 @@ composer update-brands -- 6.x   # a specific release line
 ```
 
 This pulls the current brand set from Font Awesome's public GraphQL metadata (no API token required).
+
+### Linked icons
+
+Icons inline by default: the full SVG markup is emitted at every usage. Where one icon repeats many times on a page — a table with a status glyph on every row, a Livewire component re-rendering hundreds of them — `mode="linked"` emits a reference to a cacheable per-icon URL instead:
+
+```blade
+<x-fa name="check" mode="linked" />
+```
+
+```html
+<svg viewBox="0 0 448 512" class="fill-current w-[1em] h-[1em]"><use href="/fontawesome/7/classic/solid/check.svg#i"/></svg>
+```
+
+The icon travels once and the browser caches it; every further occurrence costs about 90 bytes and two DOM nodes rather than the full path data. That matters most for what is re-sent and re-diffed on every Livewire round trip, and least for a page rendered once — the trade is one request per unique icon on a cold cache, and icons that paint a frame later than the rest of the page.
+
+Set `mode` to `linked` in the config to link everywhere and opt out per usage with `mode="inline"`. The route lives at `linked.prefix` and answers with `Cache-Control: public, max-age=…, immutable`; the URL carries the configured `version`, so a release bump invalidates every icon. Setting `linked.prefix` to `null` removes the route, and `linked` usages fall back to inlining.
+
+Two constraints come with it. Styling stops at the shadow boundary: inherited properties reach the linked content — which is what makes the default `fill-current` work — but a rule targeting an inner path does not. And an icon that fails to resolve is inlined as your `on_error` result rather than linked.
 
 ### Custom icons
 
@@ -199,6 +220,7 @@ Compiled views are invalidated by the mtime of the component file, so clearing t
 
 - `<x-fa>` is registered as an anonymous component, which is what makes Blaze folding possible.
 - Rendering happens server-side to plain SVG markup, so Inertia/Vue/React front ends can consume the output directly (e.g. via `v-html` or `dangerouslySetInnerHTML`) without a JS-side Font Awesome dependency.
+- Linked icons are resolved at render time like any other, so a miss still follows `on_error` and the icon's own `viewBox` lands on the host `<svg>` — `<use>` scales the linked document into it. Verified against Chrome; the fragment form (`icon.svg#i`) is the portable one across engines.
 - Resolution order is: in-memory request cache → persistent cache (`cache.store`) → disk cache (`disk`/`path`) → API. A successful API fetch is sanitized once and written back to both the disk cache and the persistent cache.
 
 ## License

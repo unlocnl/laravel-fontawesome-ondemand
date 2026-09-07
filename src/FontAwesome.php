@@ -14,11 +14,19 @@ use Unloc\FontAwesome\Support\IconCache;
 use Unloc\FontAwesome\Support\IconReference;
 use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
+use Unloc\FontAwesome\Support\IconUrl;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
 class FontAwesome
 {
+    /** The id given to the served file's root element, and the fragment <use> points at. */
+    public const FRAGMENT = 'i';
+
+    public const INLINE = 'inline';
+
+    public const LINKED = 'linked';
+
     /** @var array<string,?string> */
     private array $memo = [];
 
@@ -38,17 +46,25 @@ class FontAwesome
         private string $placeholderPath,
         private ?Closure $isFolding = null,
         private ?IconFetcher $warmClient = null,
+        private ?IconUrl $url = null,
+        private string $defaultMode = self::INLINE,
     ) {}
 
     public function get(string $name, ?string $family = null, ?string $style = null): ?string
     {
+        return $this->locate($name, $family, $style)['svg'] ?? null;
+    }
+
+    /** Resolves an exact reference, as encoded in an icon URL. */
+    public function raw(string $name, string $family, string $style): ?string
+    {
         $name = strtolower(trim($name));
+        $family = strtolower(trim($family));
+        $style = strtolower(trim($style));
 
-        if (str_starts_with($name, 'c-')) {
-            return $this->custom(substr($name, 2), $style);
-        }
-
-        return $this->fontAwesome($name, $family, $style) ?? $this->custom($name, $style);
+        return $family === 'custom'
+            ? $this->custom($name, $style)
+            : $this->resolve(new IconReference($name, $family, $style));
     }
 
     /**
@@ -131,33 +147,73 @@ class FontAwesome
         $this->sources->add($source);
     }
 
-    public function render(string $name, ?string $family = null, ?string $style = null, ComponentAttributeBag|array|null $attributes = null): HtmlString
+    public function render(string $name, ?string $family = null, ?string $style = null, ComponentAttributeBag|array|null $attributes = null, ?string $mode = null): HtmlString
     {
-        $svg = $this->get($name, $family, $style) ?? $this->handleMissing($name);
+        $mode = $this->mode($mode);
+        $located = $this->locate($name, $family, $style);
+
+        $svg = match (true) {
+            $located === null => $this->handleMissing($name),
+            $mode === self::LINKED && $this->url !== null => $this->linkedMarkup($located['svg'], $located['ref']),
+            default => $located['svg'],
+        };
 
         return new HtmlString($this->merger->merge($svg, $this->defaultClasses, $attributes));
     }
 
-    private function fontAwesome(string $name, ?string $family, ?string $style): ?string
+    private function mode(?string $mode): string
     {
-        $explicit = $family !== null || $style !== null;
+        $mode = strtolower(trim($mode ?? $this->defaultMode));
 
-        // Brand icons live in the classic family under the "brands" style.
-        if (! $explicit && in_array($name, $this->brands, true)) {
-            return $this->resolve(new IconReference($name, 'classic', 'brands'));
+        return match ($mode) {
+            self::INLINE, self::LINKED => $mode,
+            default => throw new \InvalidArgumentException("Unknown Font Awesome render mode [{$mode}]."),
+        };
+    }
+
+    /**
+     * Mirrors get(), keeping the reference that answered so it can be turned into a URL.
+     *
+     * @return array{svg:string,ref:IconReference}|null
+     */
+    private function locate(string $name, ?string $family, ?string $style): ?array
+    {
+        $plan = $this->plan(strtolower(trim($name)), $family, $style);
+
+        foreach (['primary', 'fallback'] as $phase) {
+            $ref = $plan[$phase];
+            if ($ref === null) {
+                continue;
+            }
+
+            $svg = $this->resolve($ref);
+            if ($svg !== null) {
+                return ['svg' => $svg, 'ref' => $ref];
+            }
         }
 
-        $ref = $this->reference($name, $family, $style);
-        $svg = $this->resolve($ref);
-        if ($svg !== null) {
-            return $svg;
+        if ($plan['custom'] === null) {
+            return null;
         }
 
-        if (! $explicit && $ref->style !== 'brands') {
-            return $this->resolve(new IconReference($name, 'classic', 'brands'));
-        }
+        $svg = $this->custom($plan['custom'], $plan['style']);
 
-        return null;
+        return $svg === null
+            ? null
+            : ['svg' => $svg, 'ref' => $this->reference($plan['custom'], 'custom', $plan['style'])];
+    }
+
+    /**
+     * The host element carries the icon's own viewBox: <use> scales the referenced
+     * document into it, so a mismatch would crop or shrink the icon.
+     */
+    private function linkedMarkup(string $svg, IconReference $ref): string
+    {
+        $viewBox = preg_match('/viewBox="([^"]*)"/i', $svg, $m) ? $m[1] : '0 0 512 512';
+
+        return '<svg viewBox="' . e($viewBox, false) . '">'
+            . '<use href="' . e($this->url->for($ref), false) . '#' . self::FRAGMENT . '"/>'
+            . '</svg>';
     }
 
     private function custom(string $name, ?string $style): ?string
@@ -274,8 +330,8 @@ class FontAwesome
     }
 
     /**
-     * Mirrors the lookup order of get(): the reference to try first, an optional
-     * brands fallback, and the custom-source name to fall through to.
+     * The reference to try first, an optional brands fallback, and the custom-source
+     * name to fall through to.
      *
      * @return array{primary:?IconReference,fallback:?IconReference,custom:?string,style:?string}
      */

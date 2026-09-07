@@ -5,18 +5,21 @@ namespace Unloc\FontAwesome;
 use Illuminate\Contracts\Cache\Factory as CacheFactory;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Unloc\FontAwesome\Console;
 use Unloc\FontAwesome\Contracts\IconFetcher;
 use Unloc\FontAwesome\Http\FontAwesomeClient;
+use Unloc\FontAwesome\Http\IconController;
 use Unloc\FontAwesome\Http\IconFetcherChain;
 use Unloc\FontAwesome\Http\JsDelivrClient;
 use Unloc\FontAwesome\Support\FilesystemIconSource;
 use Unloc\FontAwesome\Support\IconCache;
 use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
+use Unloc\FontAwesome\Support\IconUrl;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
@@ -91,6 +94,17 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(SvgAttributeMerger::class, fn () => new SvgAttributeMerger());
 
+        $this->app->singleton(IconUrl::class, fn () => new IconUrl(
+            (string) $config('linked.prefix', 'fontawesome'),
+            $config('version', 7),
+        ));
+
+        $this->app->singleton(IconController::class, fn ($app) => new IconController(
+            $app->make(FontAwesome::class),
+            $config('version', 7),
+            (int) $config('linked.max_age', 31536000),
+        ));
+
         $this->app->singleton(FontAwesome::class, fn ($app) => new FontAwesome(
             store: $app->make(IconStore::class),
             cache: $app->make(IconCache::class),
@@ -111,12 +125,26 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             warmClient: $config('source', 'auto') === 'auto' && $config('api_token')
                 ? new IconFetcherChain([$app->make(FontAwesomeClient::class), $app->make(JsDelivrClient::class)])
                 : null,
+            url: $config('linked.prefix', 'fontawesome') === null ? null : $app->make(IconUrl::class),
+            defaultMode: (string) $config('mode', FontAwesome::INLINE),
         ));
     }
 
     public function packageBooted(): void
     {
         Blade::anonymousComponentPath(__DIR__ . '/../resources/views/components');
+
+        $prefix = $this->app['config']->get('fontawesome.linked.prefix', 'fontawesome');
+        if ($prefix !== null) {
+            Route::get(trim((string) $prefix, '/') . '/{version}/{family}/{style}/{name}.svg', IconController::class)
+                ->where([
+                    'version' => '[A-Za-z0-9_.-]+',
+                    'family' => '[A-Za-z0-9_-]+',
+                    'style' => '[A-Za-z0-9_-]+',
+                    'name' => '[A-Za-z0-9_-]+',
+                ])
+                ->name('fontawesome.icon');
+        }
 
         if ($this->app['config']->get('fontawesome.blaze.fold', true) && $this->app->bound('blaze')) {
             $this->app->make('blaze')->optimize()->in(

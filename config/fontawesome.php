@@ -21,6 +21,18 @@ return [
         'style'  => 'solid',
     ],
     'classes' => 'fill-current w-[1em] h-[1em]',
+    // How icons render by default, overridable per usage with <x-fa name="check" mode="linked" />.
+    //   'inline' the SVG markup at every usage
+    //   'linked' <svg><use href="/fontawesome/..."></svg>, so the icon travels once and the
+    //            browser caches it. Every occurrence costs ~90 bytes and two DOM nodes —
+    //            worth it where one icon repeats hundreds of times, at the price of one
+    //            request per unique icon on a cold cache.
+    'mode' => 'inline',
+    'linked' => [
+        // URL prefix the icon route answers on. null removes the route, and 'linked' inlines.
+        'prefix'  => 'fontawesome',
+        'max_age' => 31536000,
+    ],
     'custom' => [
         // Directory of app-owned SVGs read by the bundled filesystem source. Style
         // subfolders are variants; root-level files answer any style. null disables it.
