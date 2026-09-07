@@ -35,3 +35,34 @@ it('uses the variant attribute to select the icon style and forwards style as a 
     expect($sent)->toBe(['REGULAR'])
         ->and($html)->toContain('style="color:red"');
 });
+
+it('renders a custom icon from the configured folder through the container', function () {
+    $dir = sys_get_temp_dir() . '/fa-component-' . bin2hex(random_bytes(4));
+    mkdir($dir . '/regular', 0777, true);
+    file_put_contents($dir . '/logo.svg', '<svg viewBox="0 0 1 1"><path id="root"/></svg>');
+    file_put_contents($dir . '/regular/logo.svg', '<svg viewBox="0 0 1 1"><path id="regular"/></svg>');
+    config()->set('fontawesome.custom.path', $dir);
+    Http::fake();
+
+    expect(Blade::render('<x-fa name="c-logo" class="text-red-500" />'))
+        ->toContain('id="root"')
+        ->toContain('class="w-4 h-4 text-red-500"');
+    expect(Blade::render('<x-fa name="c-logo" variant="regular" />'))->toContain('id="regular"');
+    Http::assertNothingSent();
+});
+
+it('lets an app register its own icon source', function () {
+    config()->set('fontawesome.custom.path', null);
+    Http::fake();
+
+    \Unloc\FontAwesome\Facades\FontAwesome::addSource(new class implements \Unloc\FontAwesome\Contracts\CustomIconSource
+    {
+        public function get(string $name, string $style): ?string
+        {
+            return $name === 'uploaded' ? '<svg viewBox="0 0 1 1"><path id="db"/></svg>' : null;
+        }
+    });
+
+    expect(Blade::render('<x-fa name="c-uploaded" />'))->toContain('id="db"');
+    Http::assertNothingSent();
+});

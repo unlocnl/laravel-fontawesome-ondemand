@@ -14,6 +14,13 @@ return [
         'style'  => 'solid',
     ],
     'classes' => 'fill-current w-[1em] h-[1em]',
+    'custom' => [
+        // Directory of app-owned SVGs read by the bundled filesystem source. Style
+        // subfolders are variants; root-level files answer any style. null disables it.
+        // Other sources (a database, an uploads table) are registered with
+        // FontAwesome::addSource() and ignore this path.
+        'path' => resource_path('fa-custom-icons'),
+    ],
     'prefetch' => [],
     'scan_paths' => [],
     'disk' => 'local',

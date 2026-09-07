@@ -10,7 +10,9 @@ use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Unloc\FontAwesome\Console;
 use Unloc\FontAwesome\Http\FontAwesomeClient;
+use Unloc\FontAwesome\Support\FilesystemIconSource;
 use Unloc\FontAwesome\Support\IconCache;
+use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
 use Unloc\FontAwesome\Support\SvgSanitizer;
@@ -56,6 +58,10 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             $config('version', 7),
         ));
 
+        $this->app->singleton(IconSourceChain::class, fn () => new IconSourceChain([
+            new FilesystemIconSource($config('custom.path')),
+        ]));
+
         $this->app->singleton(SvgSanitizer::class, fn () => new SvgSanitizer(
             (bool) $config('sanitize.strip_comments', true),
             (array) $config('sanitize.remove_attributes', []),
@@ -67,6 +73,7 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             store: $app->make(IconStore::class),
             cache: $app->make(IconCache::class),
             client: $app->make(FontAwesomeClient::class),
+            sources: $app->make(IconSourceChain::class),
             sanitizer: $app->make(SvgSanitizer::class),
             merger: $app->make(SvgAttributeMerger::class),
             defaultFamily: (string) $config('defaults.family', 'classic'),

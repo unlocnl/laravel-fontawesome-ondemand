@@ -30,6 +30,7 @@ All keys live in `config/fontawesome.php`.
 | `defaults.family` | Default family (`classic`, `sharp`, `sharp-duotone`, `duotone`) applied when `<x-fa>`'s `family` attribute is omitted. Note: `brands` is a *style*, not a family. |
 | `defaults.style` | Default style (`solid`, `regular`, `light`, `thin`, `semibold`, `duotone`, `brands`) applied when `<x-fa>`'s `variant` attribute is omitted. |
 | `classes` | CSS classes merged into every rendered `<svg>` by default (e.g. sizing utility classes). Component/attribute classes are appended, not replaced. |
+| `custom.path` | Directory the bundled filesystem source reads app-owned SVGs from. Style subfolders act as variants; root-level files answer any style. `null` disables it. See [Custom icons](#custom-icons). |
 | `prefetch` | List of icons to always warm via `fontawesome:prefetch`. Each entry is a string (icon name, uses defaults) or an array `['name' => ..., 'family' => ..., 'style' => ...]`. |
 | `scan_paths` | Extra directories (beyond `resource_path('views')`) that `fontawesome:prefetch` scans for `<x-fa>` usages. |
 | `disk` | Filesystem disk (from `config/filesystems.php`) used for the on-disk SVG cache. |
@@ -63,6 +64,65 @@ composer update-brands -- 6.x   # a specific release line
 ```
 
 This pulls the current brand set from Font Awesome's public GraphQL metadata (no API token required).
+
+### Custom icons
+
+Icons the app owns — a logo, an in-house glyph set, SVGs uploaded through a CMS — resolve through the same `<x-fa>` component and need no API token.
+
+Prefix the name with `c-` to resolve it against custom sources only:
+
+```blade
+<x-fa name="c-logo" class="w-8 h-8" />
+<x-fa name="c-logo" variant="regular" />
+```
+
+A `c-` name never reaches the Font Awesome API. Without the prefix the icon is looked up at Font Awesome first and falls through to the custom sources only when that misses, which costs one API request the first time and keeps a stray custom file from shadowing an icon in the FA catalog.
+
+#### From a folder
+
+Drop SVGs in `custom.path` (`resources/fa-custom-icons` by default). A style subfolder holds that variant; a file at the root answers any style, so a single-variant icon needs no folder:
+
+```
+resources/fa-custom-icons/
+├── logo.svg            # c-logo, any variant
+├── mark.svg
+└── regular/
+    └── logo.svg        # c-logo variant="regular"
+```
+
+Family is ignored for custom icons — `sharp` and `duotone` are Font Awesome's axes, not yours.
+
+#### From a database or an upload
+
+Implement `CustomIconSource` and register it in a service provider. Sources registered this way are tried before the bundled filesystem source, so an uploaded icon overrides a shipped file of the same name:
+
+```php
+use Unloc\FontAwesome\Contracts\CustomIconSource;
+use Unloc\FontAwesome\Facades\FontAwesome;
+
+class UploadedIconSource implements CustomIconSource
+{
+    public function get(string $name, string $style): ?string
+    {
+        return Icon::query()
+            ->where('name', $name)
+            ->where(fn ($q) => $q->where('style', $style)->orWhereNull('style'))
+            ->orderByRaw('style is null')
+            ->value('svg');
+    }
+}
+
+// AppServiceProvider::boot()
+FontAwesome::addSource(new UploadedIconSource());
+```
+
+Return raw SVG markup or `null`; the package sanitizes and merges attributes for you.
+
+#### Caching
+
+Markup from a source is sanitized once on the way in, then cached — positively and negatively — in the same persistent cache as Font Awesome icons, so a database-backed source is queried once per icon. As with Font Awesome icons, **an edited icon takes effect after `php artisan fontawesome:clear`** (add `--views` when Blaze is installed).
+
+Custom icons are not written to the on-disk store, because the folder or the database is already the durable copy and a third one in `storage/app` would go stale unnoticed. The consequence is that they have one cache tier instead of two: with `cache.store` set to `false`, a Font Awesome icon still comes off disk, while a custom icon goes back to its source on every render.
 
 ### Facade
 

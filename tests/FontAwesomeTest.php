@@ -7,11 +7,12 @@ use Unloc\FontAwesome\Exceptions\IconNotFoundException;
 use Unloc\FontAwesome\FontAwesome;
 use Unloc\FontAwesome\Http\FontAwesomeClient;
 use Unloc\FontAwesome\Support\IconCache;
+use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
-function manager(string $onError = 'placeholder', array $brands = [], ?Closure $isFolding = null): FontAwesome
+function manager(string $onError = 'placeholder', array $brands = [], ?Closure $isFolding = null, ?IconSourceChain $sources = null): FontAwesome
 {
     Storage::fake('local');
 
@@ -19,6 +20,7 @@ function manager(string $onError = 'placeholder', array $brands = [], ?Closure $
         store: new IconStore(Storage::disk('local'), 'fontawesome', 7),
         cache: new IconCache(app('cache'), 'array', null, 3600, 'fa_ondemand:', 7),
         client: new FontAwesomeClient(app(\Illuminate\Http\Client\Factory::class), app('cache')->store('array'), 'https://api.fontawesome.com', null, 7),
+        sources: $sources ?? new IconSourceChain(),
         sanitizer: new SvgSanitizer(stripComments: true),
         merger: new SvgAttributeMerger(),
         defaultFamily: 'classic',
@@ -56,6 +58,7 @@ it('serves a disk hit without any http call', function () {
         store: new IconStore(Storage::disk('local'), 'fontawesome', 7),
         cache: new IconCache(app('cache'), false, null, 3600, 'fa_ondemand:', 7),
         client: new FontAwesomeClient(app(\Illuminate\Http\Client\Factory::class), app('cache')->store('array'), 'https://api.fontawesome.com', null, 7),
+        sources: new IconSourceChain(),
         sanitizer: new SvgSanitizer(),
         merger: new SvgAttributeMerger(),
         defaultFamily: 'classic', defaultStyle: 'solid', defaultClasses: '', brands: [],
@@ -144,4 +147,107 @@ it('merges default classes and bag class into a hit', function () {
     fakeIcon('<svg viewBox="0 0 1 1"><path/></svg>');
     $out = (string) manager()->render('gear', null, null, ['class' => 'text-red-500']);
     expect($out)->toContain('class="w-4 h-4 text-red-500"');
+});
+
+class RecordingIconSource implements \Unloc\FontAwesome\Contracts\CustomIconSource
+{
+    public int $calls = 0;
+
+    /** @param array<string,string> $icons keyed by "style/name" or bare name */
+    public function __construct(private array $icons) {}
+
+    public function get(string $name, string $style): ?string
+    {
+        $this->calls++;
+
+        return $this->icons["{$style}/{$name}"] ?? $this->icons[$name] ?? null;
+    }
+}
+
+function customCache(): IconCache
+{
+    return new IconCache(app('cache'), 'array', null, 3600, 'fa_ondemand:', 7);
+}
+
+function customRef(string $name, string $style = 'solid'): \Unloc\FontAwesome\Support\IconReference
+{
+    return new \Unloc\FontAwesome\Support\IconReference($name, 'custom', $style);
+}
+
+it('resolves a c- prefixed icon from the chain without touching the api', function () {
+    Http::fake();
+    $svg = manager(sources: new IconSourceChain([new RecordingIconSource(['logo' => '<svg>logo</svg>'])]))->get('c-logo');
+
+    expect($svg)->toBe('<svg>logo</svg>');
+    Http::assertNothingSent();
+});
+
+it('resolves a c- prefixed icon per variant', function () {
+    Http::fake();
+    $m = manager(sources: new IconSourceChain([
+        new RecordingIconSource(['logo' => '<svg>root</svg>', 'regular/logo' => '<svg>regular</svg>']),
+    ]));
+
+    expect($m->get('c-logo', null, 'regular'))->toBe('<svg>regular</svg>')
+        ->and($m->get('c-logo'))->toBe('<svg>root</svg>');
+});
+
+it('never reaches the api for a missing c- prefixed icon', function () {
+    Http::fake();
+    expect(manager(sources: new IconSourceChain([new RecordingIconSource([])]))->get('c-nope'))->toBeNull();
+    Http::assertNothingSent();
+});
+
+it('negative-caches a missing custom icon', function () {
+    Http::fake();
+    $source = new RecordingIconSource([]);
+    manager(sources: new IconSourceChain([$source]))->get('c-nope');
+    manager(sources: new IconSourceChain([$source]))->get('c-nope');
+
+    expect(customCache()->get(customRef('nope')))->toBe(IconCache::NEGATIVE)
+        ->and($source->calls)->toBe(1);
+});
+
+it('falls back to the chain only after font awesome misses', function () {
+    fakeMissing();
+    $svg = manager(sources: new IconSourceChain([new RecordingIconSource(['logo' => '<svg>logo</svg>'])]))->get('logo');
+
+    expect($svg)->toBe('<svg>logo</svg>');
+    Http::assertSentCount(2); // solid, then the brands fallback
+});
+
+it('does not consult the chain when font awesome has the icon', function () {
+    fakeIcon('<svg>fa</svg>');
+    $source = new RecordingIconSource(['gear' => '<svg>custom</svg>']);
+
+    expect(manager(sources: new IconSourceChain([$source]))->get('gear'))->toBe('<svg>fa</svg>')
+        ->and($source->calls)->toBe(0);
+});
+
+it('prefers a source added at runtime over the seeded chain', function () {
+    Http::fake();
+    $m = manager(sources: new IconSourceChain([new RecordingIconSource(['logo' => '<svg>seeded</svg>'])]));
+    $m->addSource(new RecordingIconSource(['logo' => '<svg>added</svg>']));
+
+    expect($m->get('c-logo'))->toBe('<svg>added</svg>');
+});
+
+it('sanitizes and merges attributes onto a custom icon', function () {
+    Http::fake();
+    $source = new RecordingIconSource(['logo' => '<svg viewBox="0 0 1 1"><!--!c--><path/></svg>']);
+    $out = (string) manager(sources: new IconSourceChain([$source]))->render('c-logo', null, null, ['class' => 'text-red-500']);
+
+    expect($out)->not->toContain('<!--')
+        ->and($out)->toContain('class="w-4 h-4 text-red-500"');
+});
+
+it('memoizes a custom icon within a single request', function () {
+    Http::fake();
+    $source = new RecordingIconSource(['logo' => '<svg>logo</svg>']);
+    $m = manager(sources: new IconSourceChain([$source]));
+    $m->get('c-logo');
+    $m->get('c-logo');
+
+    expect($source->calls)->toBe(1)
+        ->and(customCache()->get(customRef('logo')))->toBe('<svg>logo</svg>');
 });
