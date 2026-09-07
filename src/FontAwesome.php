@@ -3,9 +3,11 @@
 namespace Unloc\FontAwesome;
 
 use Closure;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\ComponentAttributeBag;
 use Unloc\FontAwesome\Contracts\CustomIconSource;
+use Unloc\FontAwesome\Exceptions\IconFetchFailedException;
 use Unloc\FontAwesome\Exceptions\IconNotFoundException;
 use Unloc\FontAwesome\Http\FontAwesomeClient;
 use Unloc\FontAwesome\Support\IconCache;
@@ -46,6 +48,81 @@ class FontAwesome
         }
 
         return $this->fontAwesome($name, $family, $style) ?? $this->custom($name, $style);
+    }
+
+    /**
+     * Resolves many icons in as few API requests as possible: one batched query for
+     * the primary references, plus at most one more for the brands fallbacks.
+     *
+     * @param  iterable<array{name:string,family?:?string,style?:?string}>  $entries
+     * @return list<bool> whether each entry resolved, in input order
+     */
+    public function warm(iterable $entries): array
+    {
+        $plans = [];
+        foreach ($entries as $entry) {
+            $plans[] = $this->plan(
+                strtolower(trim($entry['name'])),
+                $entry['family'] ?? null,
+                $entry['style'] ?? null,
+            );
+        }
+
+        $resolved = array_fill(0, count($plans), false);
+
+        foreach (['primary', 'fallback'] as $phase) {
+            $pending = [];
+            foreach ($plans as $i => $plan) {
+                $ref = $plan[$phase] ?? null;
+                if ($resolved[$i] || $ref === null) {
+                    continue;
+                }
+
+                $peeked = $this->peek($ref);
+                if ($peeked === IconCache::NEGATIVE) {
+                    continue;
+                }
+                if ($peeked !== null) {
+                    $resolved[$i] = true;
+
+                    continue;
+                }
+
+                $pending[$ref->key()] = $ref;
+            }
+
+            if ($pending === []) {
+                continue;
+            }
+
+            try {
+                $fetched = $this->client->fetchMany($pending);
+            } catch (IconFetchFailedException $e) {
+                Log::warning("[fontawesome] batch fetch failed: {$e->getMessage()}");
+
+                continue;
+            }
+
+            foreach ($pending as $key => $ref) {
+                $html = $fetched[$key] ?? null;
+                $html === null ? $this->miss($ref) : $this->persist($ref, $html);
+            }
+
+            foreach ($plans as $i => $plan) {
+                $ref = $plan[$phase] ?? null;
+                if (! $resolved[$i] && $ref !== null && ($fetched[$ref->key()] ?? null) !== null) {
+                    $resolved[$i] = true;
+                }
+            }
+        }
+
+        foreach ($plans as $i => $plan) {
+            if (! $resolved[$i] && $plan['custom'] !== null) {
+                $resolved[$i] = $this->custom($plan['custom'], $plan['style']) !== null;
+            }
+        }
+
+        return $resolved;
     }
 
     public function addSource(CustomIconSource $source): void
@@ -113,14 +190,44 @@ class FontAwesome
 
     private function resolve(IconReference $ref): ?string
     {
+        $peeked = $this->peek($ref);
+        if ($peeked === IconCache::NEGATIVE) {
+            return null;
+        }
+        if ($peeked !== null) {
+            return $peeked;
+        }
+
+        try {
+            $html = $this->client->fetch($ref);
+        } catch (IconFetchFailedException $e) {
+            // A transport failure is not evidence the icon is missing, so it is
+            // memoized for this render but never written to the shared cache.
+            Log::warning("[fontawesome] {$ref->key()}: {$e->getMessage()}");
+
+            return $this->memo[$ref->key()] = null;
+        }
+
+        if ($html === null) {
+            return $this->miss($ref);
+        }
+
+        return $this->persist($ref, $html);
+    }
+
+    /** @return string|null the svg, IconCache::NEGATIVE for a known miss, or null when unknown */
+    private function peek(IconReference $ref): ?string
+    {
         $memoKey = $ref->key();
         if (array_key_exists($memoKey, $this->memo)) {
-            return $this->memo[$memoKey];
+            return $this->memo[$memoKey] ?? IconCache::NEGATIVE;
         }
 
         $cached = $this->cache->get($ref);
         if ($cached === IconCache::NEGATIVE) {
-            return $this->memo[$memoKey] = null;
+            $this->memo[$memoKey] = null;
+
+            return IconCache::NEGATIVE;
         }
         if ($cached !== null) {
             return $this->memo[$memoKey] = $cached;
@@ -133,18 +240,23 @@ class FontAwesome
             return $this->memo[$memoKey] = $svg;
         }
 
-        $html = $this->client->fetch($ref);
-        if ($html === null) {
-            $this->cache->putNegative($ref);
+        return null;
+    }
 
-            return $this->memo[$memoKey] = null;
-        }
-
+    private function persist(IconReference $ref, string $html): string
+    {
         $svg = $this->sanitizer->sanitize($html);
         $this->store->put($ref, $svg);
         $this->cache->put($ref, $svg);
 
-        return $this->memo[$memoKey] = $svg;
+        return $this->memo[$ref->key()] = $svg;
+    }
+
+    private function miss(IconReference $ref): ?string
+    {
+        $this->cache->putNegative($ref);
+
+        return $this->memo[$ref->key()] = null;
     }
 
     private function handleMissing(string $name): string
@@ -158,6 +270,41 @@ class FontAwesome
             'empty' => '',
             default => (string) file_get_contents($this->placeholderPath),
         };
+    }
+
+    /**
+     * Mirrors the lookup order of get(): the reference to try first, an optional
+     * brands fallback, and the custom-source name to fall through to.
+     *
+     * @return array{primary:?IconReference,fallback:?IconReference,custom:?string,style:?string}
+     */
+    private function plan(string $name, ?string $family, ?string $style): array
+    {
+        if (str_starts_with($name, 'c-')) {
+            return ['primary' => null, 'fallback' => null, 'custom' => substr($name, 2), 'style' => $style];
+        }
+
+        $explicit = $family !== null || $style !== null;
+
+        if (! $explicit && in_array($name, $this->brands, true)) {
+            return [
+                'primary' => new IconReference($name, 'classic', 'brands'),
+                'fallback' => null,
+                'custom' => $name,
+                'style' => $style,
+            ];
+        }
+
+        $ref = $this->reference($name, $family, $style);
+
+        return [
+            'primary' => $ref,
+            'fallback' => ! $explicit && $ref->style !== 'brands'
+                ? new IconReference($name, 'classic', 'brands')
+                : null,
+            'custom' => $name,
+            'style' => $style,
+        ];
     }
 
     private function reference(string $name, ?string $family, ?string $style): IconReference

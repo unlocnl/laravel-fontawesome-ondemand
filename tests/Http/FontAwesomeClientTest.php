@@ -15,7 +15,7 @@ $ref = fn () => new IconReference('gear', 'classic', 'solid');
 it('returns the svg html on success and sends no auth without a token', function () use ($ref) {
     Http::fake([
         'api.fontawesome.com' => Http::response([
-            'data' => ['release' => ['icon' => ['svgs' => [['html' => '<svg>gear</svg>']]]]],
+            'data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg>gear</svg>']]]]],
         ]),
     ]);
 
@@ -26,14 +26,14 @@ it('returns the svg html on success and sends no auth without a token', function
 });
 
 it('returns null when the icon is absent', function () use ($ref) {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => null]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => null]]])]);
     expect(client()->fetch($ref()))->toBeNull();
 });
 
 it('exchanges the api token once and reuses it', function () use ($ref) {
     Http::fake([
         'api.fontawesome.com/token' => Http::response(['access_token' => 'ACCESS', 'expires_in' => 3600]),
-        'api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => ['svgs' => [['html' => '<svg/>']]]]]]),
+        'api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg/>']]]]]]),
     ]);
 
     $client = client('API_TOKEN');

@@ -8,7 +8,7 @@ beforeEach(function () {
     Storage::fake('local');
     config()->set('fontawesome.disk', 'local');
     config()->set('fontawesome.classes', 'w-4 h-4');
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
 });
 
 it('renders the x-fa component with merged classes and attributes', function () {
@@ -25,9 +25,9 @@ it('resolves the facade to the manager', function () {
 it('uses the variant attribute to select the icon style and forwards style as a plain HTML attribute', function () {
     $sent = [];
     Http::fake(function ($request) use (&$sent) {
-        $sent[] = json_decode($request->body(), true)['variables']['style'] ?? null;
+        $sent[] = json_decode($request->body(), true)['variables']['style0'] ?? null;
 
-        return Http::response(['data' => ['release' => ['icon' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]]);
+        return Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]]);
     });
 
     $html = Blade::render('<x-fa name="heart" variant="regular" style="color:red" />');

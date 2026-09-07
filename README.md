@@ -145,6 +145,8 @@ php artisan fontawesome:clear --views
 
 `fontawesome:prefetch` warms the cache for everything in `config('fontawesome.prefetch')` plus every static `<x-fa>` usage found by scanning `resource_path('views')` and any `scan_paths`. Usages with dynamic bindings (e.g. `:name="$icon"` or `{{ $var }}` interpolation) are skipped and counted, since the icon name can't be determined statically.
 
+The whole set is fetched in a single GraphQL request (plus at most one more for brand fallbacks), so warming several hundred icons costs two requests rather than several hundred.
+
 `fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`). It leaves compiled Blade views untouched; pass `--views` to also run `view:clear`, which is what you want when Blaze has folded icons into them (see below).
 
 ## Livewire Blaze

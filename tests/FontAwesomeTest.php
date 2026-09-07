@@ -35,12 +35,12 @@ function manager(string $onError = 'placeholder', array $brands = [], ?Closure $
 
 function fakeIcon(string $html): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => ['svgs' => [['html' => $html]]]]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => $html]]]]]])]);
 }
 
 function fakeMissing(): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => null]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => null]]])]);
 }
 
 it('fetches, sanitizes, stores on a miss', function () {
@@ -72,9 +72,9 @@ it('short-circuits known brands with a single query', function () {
     $sent = [];
     Http::fake(function ($request) use (&$sent) {
         $vars = json_decode($request->body(), true)['variables'];
-        $sent[] = "{$vars['family']}/{$vars['style']}";
+        $sent[] = "{$vars['family0']}/{$vars['style0']}";
 
-        return Http::response(['data' => ['release' => ['icon' => ['svgs' => [['html' => '<svg>gh</svg>']]]]]]);
+        return Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg>gh</svg>']]]]]]);
     });
 
     expect(manager(brands: ['github'])->get('github'))->toBe('<svg>gh</svg>');
@@ -84,11 +84,11 @@ it('short-circuits known brands with a single query', function () {
 it('falls back to brands after a classic miss for unknown names', function () {
     $sent = [];
     Http::fake(function ($request) use (&$sent) {
-        $style = json_decode($request->body(), true)['variables']['style'];
+        $style = json_decode($request->body(), true)['variables']['style0'];
         $sent[] = $style;
         $icon = $style === 'BRANDS' ? ['svgs' => [['html' => '<svg>x</svg>']]] : null;
 
-        return Http::response(['data' => ['release' => ['icon' => $icon]]]);
+        return Http::response(['data' => ['release' => ['i0' => $icon]]]);
     });
 
     expect(manager()->get('some-brand'))->toBe('<svg>x</svg>');

@@ -19,12 +19,12 @@ beforeEach(function () {
 // Http::fake() appends stubs and the first match wins, so each test registers its own.
 function fakeHit(): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
 }
 
 function fakeMiss(): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['icon' => null]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => null]]])]);
 }
 
 it('folds a statically named icon into the compiled template', function () {

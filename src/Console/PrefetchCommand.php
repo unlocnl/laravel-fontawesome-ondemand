@@ -15,14 +15,10 @@ class PrefetchCommand extends Command
 
     public function handle(FontAwesome $fontawesome): int
     {
-        $entries = $this->entries();
-        $warmed = 0;
-        $failed = 0;
+        $results = $fontawesome->warm($this->entries());
 
-        foreach ($entries as $entry) {
-            $svg = $fontawesome->get($entry['name'], $entry['family'] ?? null, $entry['style'] ?? null);
-            $svg === null ? $failed++ : $warmed++;
-        }
+        $warmed = count(array_filter($results));
+        $failed = count($results) - $warmed;
 
         $this->info("Font Awesome prefetch: {$warmed} warmed, {$failed} failed, {$this->skipped} dynamic skipped.");
 

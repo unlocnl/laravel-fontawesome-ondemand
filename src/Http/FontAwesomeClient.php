@@ -4,7 +4,9 @@ namespace Unloc\FontAwesome\Http;
 
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Unloc\FontAwesome\Exceptions\IconFetchFailedException;
 use Unloc\FontAwesome\Support\IconReference;
 
 class FontAwesomeClient
@@ -35,48 +37,159 @@ class FontAwesomeClient
         private string $endpoint,
         private ?string $apiToken,
         private int|string $version,
+        private int $tries = 3,
+        private int $maxRetryDelay = 5000,
     ) {}
 
+    /**
+     * @throws IconFetchFailedException when the request could not be completed;
+     *                                  a null return means the icon does not exist.
+     */
     public function fetch(IconReference $ref): ?string
     {
-        $variables = [
-            'version' => "{$this->version}.x",
-            'name' => $ref->name,
-            'family' => $this->enum(self::FAMILY_MAP, $ref->family, 'family'),
-            'style' => $this->enum(self::STYLE_MAP, $ref->style, 'style'),
-        ];
+        return $this->fetchMany([$ref])[$ref->key()] ?? null;
+    }
+
+    /**
+     * Resolves every reference in a single aliased GraphQL document.
+     *
+     * @param  iterable<IconReference>  $refs
+     * @return array<string,?string> keyed by IconReference::key(); null means the icon does not exist
+     *
+     * @throws IconFetchFailedException
+     */
+    public function fetchMany(iterable $refs): array
+    {
+        $unique = [];
+        foreach ($refs as $ref) {
+            $unique[$ref->key()] = $ref;
+        }
+
+        if ($unique === []) {
+            return [];
+        }
+
+        $aliases = [];
+        $declarations = ['$version: String!'];
+        $selections = [];
+        $variables = ['version' => "{$this->version}.x"];
+
+        foreach (array_values($unique) as $i => $ref) {
+            $alias = "i{$i}";
+            $aliases[$alias] = $ref->key();
+
+            $declarations[] = "\$name{$i}: String!";
+            $declarations[] = "\$family{$i}: Family!";
+            $declarations[] = "\$style{$i}: Style!";
+
+            $selections[] = "{$alias}: icon(name: \$name{$i}) { svgs(filter: { familyStyles: [{ family: \$family{$i}, style: \$style{$i} }] }) { html } }";
+
+            $variables["name{$i}"] = $ref->name;
+            $variables["family{$i}"] = $this->enum(self::FAMILY_MAP, $ref->family, 'family');
+            $variables["style{$i}"] = $this->enum(self::STYLE_MAP, $ref->style, 'style');
+        }
+
+        $query = sprintf(
+            "query Icons(%s) {\n  release(version: \$version) {\n    %s\n  }\n}",
+            implode(', ', $declarations),
+            implode("\n    ", $selections),
+        );
+
+        $json = $this->post($this->authenticated(), [
+            'query' => $query,
+            'variables' => $variables,
+        ]);
+
+        if (! empty($json['errors'])) {
+            throw new IconFetchFailedException('GraphQL error: ' . json_encode($json['errors']));
+        }
+
+        $release = $json['data']['release'] ?? null;
+        if (! is_array($release)) {
+            throw new IconFetchFailedException("No data for release {$this->version}.x.");
+        }
+
+        $results = [];
+        foreach ($aliases as $alias => $key) {
+            // A missing icon comes back as an explicit null alias with no errors;
+            // an empty svgs list means the icon exists but not in that family/style.
+            $results[$key] = $release[$alias]['svgs'][0]['html'] ?? null;
+        }
+
+        return $results;
+    }
+
+    private function authenticated(): PendingRequest
+    {
+        $request = $this->http->asJson()->acceptJson();
+
+        if ($token = $this->accessToken()) {
+            $request = $request->withToken($token);
+        }
+
+        return $request;
+    }
+
+    /**
+     * @param  array<string,mixed>  $payload
+     * @return array<string,mixed>
+     *
+     * @throws IconFetchFailedException
+     */
+    private function post(PendingRequest $request, array $payload, ?string $url = null): array
+    {
+        $url ??= $this->endpoint;
 
         try {
-            $request = $this->http->asJson()->acceptJson();
-            if ($token = $this->accessToken()) {
-                $request = $request->withToken($token);
-            }
-            $response = $request->post($this->endpoint, [
-                'query' => $this->query(),
-                'variables' => $variables,
-            ]);
+            $response = $request
+                ->retry($this->tries, $this->retryDelay(), $this->retryWhen(), throw: false)
+                ->post($url, $payload);
         } catch (\Throwable $e) {
-            Log::warning('[fontawesome] request failed: ' . $e->getMessage());
-
-            return null;
+            throw new IconFetchFailedException("Request to {$url} failed: {$e->getMessage()}", previous: $e);
         }
 
         if ($response->failed()) {
-            Log::warning("[fontawesome] HTTP {$response->status()} fetching {$ref->key()}");
-
-            return null;
+            throw new IconFetchFailedException("HTTP {$response->status()} from {$url}.");
         }
 
-        $json = $response->json();
-        if (! empty($json['errors'])) {
-            Log::warning("[fontawesome] GraphQL error for {$ref->key()}: " . json_encode($json['errors']));
-
-            return null;
-        }
-
-        return $json['data']['release']['icon']['svgs'][0]['html'] ?? null;
+        return (array) $response->json();
     }
 
+    private function retryWhen(): \Closure
+    {
+        return static fn (\Throwable $e): bool => ! $e instanceof RequestException
+            || $e->response->status() === 429
+            || $e->response->serverError();
+    }
+
+    private function retryDelay(): \Closure
+    {
+        return function (int $attempt, \Throwable $e): int {
+            $after = $e instanceof RequestException
+                ? $this->retryAfter($e)
+                : null;
+
+            return min($after ?? (int) (100 * 2 ** ($attempt - 1)), $this->maxRetryDelay);
+        };
+    }
+
+    private function retryAfter(RequestException $e): ?int
+    {
+        $header = $e->response->header('Retry-After');
+        if ($header === '') {
+            return null;
+        }
+
+        if (is_numeric($header)) {
+            return (int) ($header * 1000);
+        }
+
+        $timestamp = strtotime($header);
+
+        return $timestamp === false ? null : max(0, $timestamp - time()) * 1000;
+    }
+
+    /** @throws IconFetchFailedException */
     private function accessToken(): ?string
     {
         if ($this->apiToken === null || $this->apiToken === '') {
@@ -88,26 +201,14 @@ class FontAwesomeClient
             return $cached;
         }
 
-        try {
-            $response = $this->http->withToken($this->apiToken)->asJson()->post("{$this->endpoint}/token");
-        } catch (\Throwable $e) {
-            Log::warning('[fontawesome] token exchange failed: ' . $e->getMessage());
+        $json = $this->post($this->http->withToken($this->apiToken)->asJson(), [], "{$this->endpoint}/token");
 
-            return null;
-        }
-
-        if ($response->failed()) {
-            Log::warning("[fontawesome] token exchange failed: HTTP {$response->status()}");
-
-            return null;
-        }
-
-        $token = $response->json('access_token');
+        $token = $json['access_token'] ?? null;
         if (! $token) {
-            return null;
+            throw new IconFetchFailedException('Token exchange returned no access_token.');
         }
 
-        $expires = (int) ($response->json('expires_in') ?? $response->json('expires_within_seconds') ?? 3600);
+        $expires = (int) ($json['expires_in'] ?? $json['expires_within_seconds'] ?? 3600);
         $this->cache->put($key, $token, max(60, $expires - 60));
 
         return $token;
@@ -117,22 +218,5 @@ class FontAwesomeClient
     private function enum(array $map, string $value, string $label): string
     {
         return $map[$value] ?? throw new \InvalidArgumentException("Unknown Font Awesome {$label} [{$value}].");
-    }
-
-    private function query(): string
-    {
-        return <<<'GQL'
-        query Icon($version: String!, $name: String!, $family: Family!, $style: Style!) {
-          release(version: $version) {
-            icon(name: $name) {
-              id
-              svgs(filter: { familyStyles: [{ family: $family, style: $style }] }) {
-                html
-                familyStyle { family style }
-              }
-            }
-          }
-        }
-        GQL;
     }
 }
