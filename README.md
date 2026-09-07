@@ -122,6 +122,24 @@ FontAwesome::addSource(new UploadedIconSource());
 
 Return raw SVG markup or `null`; the package sanitizes and merges attributes for you.
 
+#### Authoring
+
+Custom SVGs are inlined verbatim next to Font Awesome ones and get the same `classes` merged onto the root, so they only look right if they are drawn on comparable terms.
+
+1. **Draw on a 512-tall grid.** Font Awesome normalizes height, not width — `viewBox="0 0 512 512"` for `house`, `0 0 448 512` for `user`, `0 0 256 512` for `1`. Matching that height makes a custom icon sit at the same optical size in a line of text. The default `w-[1em] h-[1em]` is square, so a narrower glyph is centered in the box rather than stretched, exactly as Font Awesome's own narrow icons are.
+2. **Always include `viewBox`; drop `width` and `height`.** Without a `viewBox` the sizing classes scale the viewport and not the artwork. Width and height attributes survive the merge and only add noise.
+3. **Never hardcode a color, unless the color is the icon.** Omit `fill` or set `fill="currentColor"`. A literal `fill="#f00"` on a child path outranks the root's inherited `fill-current`, so `text-*` utilities will not recolor it. Stroke-drawn icons need `stroke="currentColor"` and `fill="none"`. The exception is a brand mark whose color is part of the identity, or a multi-color logo that cannot be a single path — there, per-path fills are the right answer, and that same cascade rule is what keeps a stray `text-*` from breaking the mark. Font Awesome's own `brands` style is not this case: `spotify` and `google` both ship as one `currentColor` path and follow the text color like any other glyph.
+4. **Leave `class` off the root.** Classes are merged, not replaced — a root `class="w-6 h-6"` ends up alongside the default `w-[1em] h-[1em]` and stylesheet order decides the winner, not your markup. Pass per-usage classes on the component instead.
+5. **Avoid `<defs>`, gradients, masks and clip paths, or prefix their ids.** The markup is inlined once per usage, so a shared `id="a"` collides across instances on the same page and references resolve to the first one.
+
+A well-formed custom icon is a root tag and paths, nothing else:
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M224 32 32 480h384L224 32z"/></svg>
+```
+
+Exports from design tools usually carry inline `style` attributes and editor metadata; `sanitize.remove_attributes` strips those on the way in.
+
 #### Caching
 
 Markup from a source is sanitized once on the way in, then cached — positively and negatively — in the same persistent cache as Font Awesome icons, so a database-backed source is queried once per icon. As with Font Awesome icons, **an edited icon takes effect after `php artisan fontawesome:clear`** (add `--views` when Blaze is installed).
