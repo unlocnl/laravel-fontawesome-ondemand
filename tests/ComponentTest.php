@@ -66,3 +66,23 @@ it('lets an app register its own icon source', function () {
     expect(Blade::render('<x-fa name="c-uploaded" />'))->toContain('id="db"');
     Http::assertNothingSent();
 });
+
+it('treats blank family, variant and mode as absent', function () {
+    expect(Blade::render('<x-fa name="gear" family="" />'))->toContain('<path')
+        ->and(Blade::render('<x-fa name="gear" variant="" />'))->toContain('<path')
+        ->and(Blade::render('<x-fa name="gear" mode="" />'))->toContain('<path');
+});
+
+it('keeps the brands fallback when family and variant are blank', function () {
+    $sent = [];
+    Http::fake(function ($request) use (&$sent) {
+        $vars = json_decode($request->body(), true)['variables'];
+        $sent[] = [$vars['family0'], $vars['style0']];
+
+        return Http::response(['data' => ['release' => ['i0' => ['svgs' => []]]]]);
+    });
+
+    Blade::render('<x-fa name="github" family="" variant="" />');
+
+    expect($sent)->toBe([['CLASSIC', 'BRANDS']]);
+});

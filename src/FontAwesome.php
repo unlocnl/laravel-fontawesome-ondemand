@@ -163,7 +163,7 @@ class FontAwesome
 
     private function mode(?string $mode): string
     {
-        $mode = strtolower(trim($mode ?? $this->defaultMode));
+        $mode = strtolower(trim(blank($mode) ? $this->defaultMode : $mode));
 
         return match ($mode) {
             self::INLINE, self::LINKED => $mode,
@@ -337,6 +337,9 @@ class FontAwesome
      */
     private function plan(string $name, ?string $family, ?string $style): array
     {
+        $family = blank($family) ? null : $family;
+        $style = blank($style) ? null : $style;
+
         if (str_starts_with($name, 'c-')) {
             return ['primary' => null, 'fallback' => null, 'custom' => substr($name, 2), 'style' => $style];
         }
