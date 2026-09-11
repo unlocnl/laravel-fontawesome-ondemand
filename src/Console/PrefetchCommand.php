@@ -44,7 +44,7 @@ class PrefetchCommand extends Command
     /** @return list<array{name:string,family?:string,style?:string}> */
     private function scan(): array
     {
-        $paths = array_merge([resource_path('views')], (array) config('fontawesome.scan_paths', []));
+        $paths = array_merge([resource_path('views'), app_path()], (array) config('fontawesome.scan_paths', []));
         $found = [];
 
         foreach ($paths as $path) {
@@ -52,8 +52,14 @@ class PrefetchCommand extends Command
                 continue;
             }
 
-            foreach ($this->bladeFiles($path) as $file) {
+            foreach ($this->files($path) as $file) {
                 $content = (string) file_get_contents($file);
+                array_push($found, ...$this->markers($content));
+
+                if (! str_ends_with($file, '.blade.php')) {
+                    continue;
+                }
+
                 preg_match_all('/<x-fa\s+([^>]+?)\/?>/is', $content, $matches);
 
                 foreach ($matches[1] as $attrString) {
@@ -71,6 +77,28 @@ class PrefetchCommand extends Command
                     ], fn ($v) => $v !== null);
                 }
             }
+        }
+
+        return $found;
+    }
+
+    /** @return list<array{name:string,family?:string,style?:string}> */
+    private function markers(string $content): array
+    {
+        preg_match_all('/fa-prefetch\/([A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)/', $content, $matches);
+
+        $found = [];
+        foreach ($matches[1] as $path) {
+            $segments = explode('/', $path);
+            if (count($segments) > 3) {
+                continue;
+            }
+
+            $found[] = array_filter([
+                'name' => array_pop($segments),
+                'style' => array_pop($segments),
+                'family' => array_pop($segments),
+            ], fn ($v) => $v !== null);
         }
 
         return $found;
@@ -97,11 +125,11 @@ class PrefetchCommand extends Command
     }
 
     /** @return iterable<string> */
-    private function bladeFiles(string $path): iterable
+    private function files(string $path): iterable
     {
         $iterator = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
-            if ($file->isFile() && str_ends_with($file->getFilename(), '.blade.php')) {
+            if ($file->isFile()) {
                 yield $file->getPathname();
             }
         }

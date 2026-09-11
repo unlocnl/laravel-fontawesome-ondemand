@@ -35,6 +35,30 @@ it('prefetches config entries and scanned static usages, skipping dynamic', func
     Storage::disk('local')->assertExists('fontawesome/7/sharp/solid/star.svg');
 });
 
+it('prefetches fa-prefetch markers in any file, filling missing parts from the right with defaults', function () {
+    $views = sys_get_temp_dir() . '/fa-views-' . uniqid();
+    $app = sys_get_temp_dir() . '/fa-app-' . uniqid();
+    $js = sys_get_temp_dir() . '/fa-js-' . uniqid();
+    mkdir($views);
+    mkdir($app);
+    mkdir($js);
+    file_put_contents($views . '/page.blade.php', '{{-- fa-prefetch/duotone/light/spinner-third --}} <!-- fa-prefetch/bell -->');
+    file_put_contents($app . '/Status.php', "<?php\n// fa-prefetch/regular/stroopwafel fa-prefetch/angle-right\n# fa-prefetch/a/b/c/too-deep\n");
+    file_put_contents($js . '/icons.js', '/* fa-prefetch/sharp/solid/house */');
+
+    config()->set('fontawesome.scan_paths', [$views, $js]);
+    $this->app->useAppPath($app);
+
+    $this->artisan('fontawesome:prefetch')->assertSuccessful();
+
+    Storage::disk('local')->assertExists('fontawesome/7/duotone/light/spinner-third.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/solid/bell.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/regular/stroopwafel.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/solid/angle-right.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/sharp/solid/house.svg');
+    expect(Storage::disk('local')->allFiles('fontawesome/7/b'))->toBe([]);
+});
+
 it('warms every icon in a single request', function () {
     config()->set('fontawesome.prefetch', ['gear', 'user', 'heart', 'star', 'house', 'bell']);
 

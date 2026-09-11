@@ -39,7 +39,7 @@ All keys live in `config/fontawesome.php`.
 | `linked.max_age` | `max-age` in seconds sent with each served icon, alongside `public` and `immutable`. |
 | `custom.path` | Directory the bundled filesystem source reads app-owned SVGs from. Style subfolders act as variants; root-level files answer any style. `null` disables it. See [Custom icons](#custom-icons). |
 | `prefetch` | List of icons to always warm via `fontawesome:prefetch`. Each entry is a string (icon name, uses defaults) or an array `['name' => ..., 'family' => ..., 'style' => ...]`. |
-| `scan_paths` | Extra directories (beyond `resource_path('views')`) that `fontawesome:prefetch` scans for `<x-fa>` usages. |
+| `scan_paths` | Extra directories (beyond `resource_path('views')` and `app_path()`) that `fontawesome:prefetch` scans for `<x-fa>` usages and `fa-prefetch/` markers. |
 | `disk` | Filesystem disk (from `config/filesystems.php`) used for the on-disk SVG cache. |
 | `path` | Root path within that disk where cached SVGs are stored. |
 | `sanitize.strip_comments` | Strip HTML/XML comments from fetched SVG markup before caching/rendering. |
@@ -188,11 +188,21 @@ php artisan fontawesome:clear --views
 
 `fontawesome:prefetch` warms the cache for everything in `config('fontawesome.prefetch')` plus every static `<x-fa>` usage found by scanning `resource_path('views')` and any `scan_paths`. Usages with dynamic bindings (e.g. `:name="$icon"` or `{{ $var }}` interpolation) are skipped and counted, since the icon name can't be determined statically.
 
+To prefetch icons the scan can't see, drop an `fa-prefetch/` marker in any file under `app_path()`, `resource_path('views')` or `scan_paths`, in whatever comment syntax the file uses:
+
+```php
+// fa-prefetch/duotone/light/spinner-third
+// fa-prefetch/regular/stroopwafel
+// fa-prefetch/angle-right
+```
+
+The path reads `family/style/name`, filled from the right: `name` alone uses the default family and style, `style/name` uses the default family. Paths with more than three segments are ignored.
+
 Warming runs in two phases — the requested icons, then brand fallbacks. On `api`, and on `auto` with a token, each phase is one batched GraphQL request, so several hundred icons cost two requests rather than several hundred; whatever the API doesn't answer falls back to the CDN. Without a token — `auto` with none, or `cdn` — every icon is its own CDN request, issued concurrently in waves of at most 25.
 
 `fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`). It leaves compiled Blade views untouched; pass `--views` to also run `view:clear`, which is what you want when Blaze has folded icons into them (see below).
 
-> **Deploy tip:** run `fontawesome:prefetch` as its own deploy step to keep used icons up to date.
+> **Deploy tip:** run `fontawesome:prefetch` as its own deploy step to keep used icons up to date and make sure to mark the disk the icons save to as a shared resource that survives deploys.
 
 ## Livewire Blaze
 
