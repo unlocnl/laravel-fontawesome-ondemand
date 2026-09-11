@@ -45,8 +45,32 @@ it('exchanges the api token once and reuses it', function () use ($ref) {
     Http::assertSent(fn ($r) => $r->url() === 'https://api.fontawesome.com' && $r->hasHeader('Authorization', 'Bearer ACCESS'));
 });
 
-it('throws on an unknown family', function () {
+it('maps kebab-case families to the graphql enum', function () {
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg/>']]]]]])]);
+
+    client()->fetch(new IconReference('gear', 'slab-press-duo', 'regular'));
+
+    Http::assertSent(fn ($r) => $r['variables']['family0'] === 'SLAB_PRESS_DUO');
+});
+
+it('misses an unknown family or style without failing the rest of the batch', function () {
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg>gear</svg>']]]]]])]);
+
+    $known = new IconReference('gear', 'classic', 'solid');
+    $family = new IconReference('gear', 'nonsense', 'solid');
+    $style = new IconReference('gear', 'classic', 'nonsense');
+
+    expect(client()->fetchMany([$family, $known, $style]))->toEqual([
+        $known->key() => '<svg>gear</svg>',
+        $family->key() => null,
+        $style->key() => null,
+    ]);
+    Http::assertSentCount(1);
+});
+
+it('sends no request when every reference is unknown', function () {
     Http::fake();
-    expect(fn () => client()->fetch(new IconReference('gear', 'nonsense', 'solid')))
-        ->toThrow(InvalidArgumentException::class);
+
+    expect(client()->fetch(new IconReference('gear', 'nonsense', 'solid')))->toBeNull();
+    Http::assertNothingSent();
 });

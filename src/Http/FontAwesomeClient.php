@@ -15,10 +15,30 @@ class FontAwesomeClient implements IconFetcher
     // Font Awesome GraphQL `Family` enum. "brands" is NOT a family — brand
     // icons are the classic family under the "brands" style.
     private const FAMILY_MAP = [
+        'chisel' => 'CHISEL',
         'classic' => 'CLASSIC',
-        'sharp' => 'SHARP',
         'duotone' => 'DUOTONE',
+        'etch' => 'ETCH',
+        'graphite' => 'GRAPHITE',
+        'jelly' => 'JELLY',
+        'jelly-duo' => 'JELLY_DUO',
+        'jelly-fill' => 'JELLY_FILL',
+        'mosaic' => 'MOSAIC',
+        'notdog' => 'NOTDOG',
+        'notdog-duo' => 'NOTDOG_DUO',
+        'pixel' => 'PIXEL',
+        'sharp' => 'SHARP',
         'sharp-duotone' => 'SHARP_DUOTONE',
+        'slab' => 'SLAB',
+        'slab-duo' => 'SLAB_DUO',
+        'slab-press' => 'SLAB_PRESS',
+        'slab-press-duo' => 'SLAB_PRESS_DUO',
+        'thumbprint' => 'THUMBPRINT',
+        'utility' => 'UTILITY',
+        'utility-duo' => 'UTILITY_DUO',
+        'utility-fill' => 'UTILITY_FILL',
+        'vellum' => 'VELLUM',
+        'whiteboard' => 'WHITEBOARD',
     ];
 
     // Font Awesome GraphQL `Style` enum.
@@ -63,8 +83,20 @@ class FontAwesomeClient implements IconFetcher
         $declarations = ['$version: String!'];
         $selections = [];
         $variables = ['version' => "{$this->version}.x"];
+        $results = [];
 
-        foreach (array_values($unique) as $i => $ref) {
+        foreach ($unique as $key => $ref) {
+            $family = self::FAMILY_MAP[$ref->family] ?? null;
+            $style = self::STYLE_MAP[$ref->style] ?? null;
+
+            // An unknown enum value fails the whole GraphQL document, not just its alias.
+            if ($family === null || $style === null) {
+                $results[$key] = null;
+
+                continue;
+            }
+
+            $i = count($aliases);
             $alias = "i{$i}";
             $aliases[$alias] = $ref->key();
 
@@ -75,8 +107,12 @@ class FontAwesomeClient implements IconFetcher
             $selections[] = "{$alias}: icon(name: \$name{$i}) { svgs(filter: { familyStyles: [{ family: \$family{$i}, style: \$style{$i} }] }) { html } }";
 
             $variables["name{$i}"] = $ref->name;
-            $variables["family{$i}"] = $this->enum(self::FAMILY_MAP, $ref->family, 'family');
-            $variables["style{$i}"] = $this->enum(self::STYLE_MAP, $ref->style, 'style');
+            $variables["family{$i}"] = $family;
+            $variables["style{$i}"] = $style;
+        }
+
+        if ($aliases === []) {
+            return $results;
         }
 
         $query = sprintf(
@@ -99,7 +135,6 @@ class FontAwesomeClient implements IconFetcher
             throw new IconFetchFailedException("No data for release {$this->version}.x.");
         }
 
-        $results = [];
         foreach ($aliases as $alias => $key) {
             // A missing icon comes back as an explicit null alias with no errors;
             // an empty svgs list means the icon exists but not in that family/style.
@@ -202,11 +237,5 @@ class FontAwesomeClient implements IconFetcher
         $this->cache->put($key, $token, max(60, $expires - 60));
 
         return $token;
-    }
-
-    /** @param array<string,string> $map */
-    private function enum(array $map, string $value, string $label): string
-    {
-        return $map[$value] ?? throw new \InvalidArgumentException("Unknown Font Awesome {$label} [{$value}].");
     }
 }

@@ -4,7 +4,7 @@ Fetches Font Awesome 6 and 7 icons on demand, caches them disk-first, and render
 
 Icons come from two places. The free set is pulled unauthenticated from the `@fortawesome/fontawesome-free` npm package on jsDelivr; everything else comes from the official Font Awesome GraphQL API, whose `svgs` field is authenticated even for free icons. Out of the box, with no `FONTAWESOME_API_TOKEN`, the free set works and nothing else does. Set a token to unlock Pro families and styles.
 
-The free package carries the `classic` family only. `sharp`, `duotone`, `sharp-duotone` and the `light` / `thin` / `semibold` styles need a Pro token.
+The free package carries the `classic` family only. Every other family (`sharp`, `duotone`, `jelly`, `slab-press`, …) and the `light` / `thin` / `semibold` styles need a Pro token.
 
 ## Requirements
 
@@ -31,7 +31,7 @@ All keys live in `config/fontawesome.php`.
 | `api_token` | Reads `FONTAWESOME_API_TOKEN`. Unlocks Pro families and styles, and lets `auto` fall through to the API for icons the free package lacks. The client exchanges it for a short-lived GraphQL token and caches that exchange. Without a token the API leg is skipped entirely. |
 | `endpoint` | Font Awesome GraphQL endpoint. Override for testing/mocking. |
 | `cdn_endpoint` | npm CDN root the free package is fetched from. Requests go to `{cdn_endpoint}/@fortawesome/fontawesome-free@{version}/svgs/{style}/{name}.svg`. |
-| `defaults.family` | Default family (`classic`, `sharp`, `sharp-duotone`, `duotone`) applied when `<x-fa>`'s `family` attribute is omitted. Note: `brands` is a *style*, not a family. |
+| `defaults.family` | Default family applied when `<x-fa>`'s `family` attribute is omitted: any Font Awesome family in kebab case (`classic`, `sharp`, `duotone`, `sharp-duotone`, `jelly-duo`, `slab-press`, …). An unknown family or style resolves as a miss. Note: `brands` is a *style*, not a family. |
 | `defaults.style` | Default style (`solid`, `regular`, `light`, `thin`, `semibold`, `duotone`, `brands`) applied when `<x-fa>`'s `variant` attribute is omitted. |
 | `classes` | CSS classes merged into every rendered `<svg>` by default (e.g. sizing utility classes). Component/attribute classes are appended, not replaced. |
 | `mode` | How icons render by default: `inline` (the SVG markup at every usage) or `linked` (a `<use>` reference to a cacheable per-icon URL). Defaults to `inline`; override per usage with the `mode` attribute. An unknown value throws. See [Linked icons](#linked-icons). |
