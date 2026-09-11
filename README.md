@@ -1,6 +1,13 @@
 # Font Awesome On-Demand for Laravel
 
-Fetches Font Awesome 6 and 7 icons on demand, caches them disk-first, and renders them through a `<x-fa>` Blade component.
+Renders Font Awesome 6 and 7 icons as inline SVG through a `<x-fa>` Blade component. Each icon is fetched the first time or it's used or prefetched and cached on disk from then on.
+
+- **No kit, no webfont.** Icons arrive as SVG in the HTML response: no client-side JavaScript, no font download, no flash of missing icons.
+- **Only the icons you use, nothing chosen up front.** No Pro npm package or private registry, no importing individual icons into a bundle ahead of time, no thousands of SVGs in `vendor/` or `node_modules/`.
+- **Any icon at runtime.** `<x-fa :name="$page->icon" />` resolves whatever name it's given, so a CMS editor can pick from the full catalog of thousands instead of a fixed, pre-bundled set. The first render fetches it; every render after reads the cache.
+- **Pro through one env var.** `FONTAWESOME_API_TOKEN` unlocks every Pro family and style. Without it, the free set works from jsDelivr.
+- **Warm before you deploy.** `fontawesome:prefetch` finds every icon your views and `fa-prefetch/` markers reference and caches them ahead of time, in one batched request when a token is set.
+- **Zero render cost with Blaze.** Under Livewire Blaze, icons fold into the compiled views.
 
 Icons come from two places. The free set is pulled unauthenticated from the `@fortawesome/fontawesome-free` npm package on jsDelivr; everything else comes from the official Font Awesome GraphQL API, whose `svgs` field is authenticated even for free icons. Out of the box, with no `FONTAWESOME_API_TOKEN`, the free set works and nothing else does. Set a token to unlock Pro families and styles.
 
