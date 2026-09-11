@@ -1,6 +1,6 @@
 # Font Awesome On-Demand for Laravel
 
-Renders Font Awesome 6 and 7 icons as inline SVG through a `<x-fa>` Blade component. Each icon is fetched the first time or it's used or prefetched and cached on disk from then on.
+Renders Font Awesome 6 and 7 icons as inline SVG through a `<x-fa>` Blade component. Each icon is fetched the first time it's used or prefetched and cached on disk from then on.
 
 - **No kit, no webfont.** Icons arrive as SVG in the HTML response: no client-side JavaScript, no font download, no flash of missing icons.
 - **Only the icons you use, nothing chosen up front.** No Pro npm package or private registry, no importing individual icons into a bundle ahead of time, no thousands of SVGs in `vendor/` or `node_modules/`.
