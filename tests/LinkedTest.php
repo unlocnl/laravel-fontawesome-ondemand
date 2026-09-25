@@ -32,7 +32,7 @@ it('emits a use reference carrying the icon viewBox and the merged attributes', 
     $html = Blade::render('<x-fa name="gear" mode="linked" class="text-red-500" />');
 
     expect($html)->toContain('<use href="/fontawesome/7/classic/solid/gear.svg#i"/>')
-        ->toContain('viewBox="-96 -64 640 640"')
+        ->toContain('viewBox="-32 0 512 512" overflow="visible"')
         ->toContain('class="w-4 h-4 text-red-500"')
         ->not->toContain('<path');
 });
@@ -98,7 +98,7 @@ it('serves the icon with an id, a namespace and immutable caching', function () 
     expect($response->content())
         ->toContain('id="i"')
         ->toContain('xmlns="http://www.w3.org/2000/svg"')
-        ->toContain('viewBox="-96 -64 640 640"');
+        ->toContain('viewBox="-32 0 512 512" overflow="visible"');
 });
 
 it('replaces an id the source icon already carried', function () {

@@ -32,7 +32,7 @@ it('folds a statically named icon into the compiled template', function () {
 
     $compiled = Blade::compileString('<x-fa name="gear" class="text-red-500" />');
 
-    expect($compiled)->toContain('<svg viewBox="-0.125 -0.125 1.25 1.25"')
+    expect($compiled)->toContain('<svg viewBox="0 0 1 1" overflow="visible"')
         ->toContain('class="w-4 h-4 text-red-500"')
         ->not->toContain('pushData');
 });

@@ -222,15 +222,14 @@ class FontAwesome
             : ['svg' => $svg, 'ref' => $this->reference($plan['custom'], 'custom', $plan['style'], $plan['version'])];
     }
 
-    /**
-     * The host element carries the icon's own viewBox: <use> scales the referenced
-     * document into it, so a mismatch would crop or shrink the icon.
-     */
+    // <use> scales the referenced document into the host, so the host needs the icon's own
+    // viewBox and overflow or the icon crops or shrinks.
     private function linkedMarkup(string $svg, IconReference $ref): string
     {
         $viewBox = preg_match('/viewBox="([^"]*)"/i', $svg, $m) ? $m[1] : '0 0 512 512';
+        $overflow = preg_match('/<svg\b[^>]*\soverflow="([^"]*)"/i', $svg, $m) ? ' overflow="' . e($m[1], false) . '"' : '';
 
-        return '<svg viewBox="' . e($viewBox, false) . '">'
+        return '<svg viewBox="' . e($viewBox, false) . '"' . $overflow . '>'
             . '<use href="' . e($this->url->for($ref), false) . '#' . self::FRAGMENT . '"/>'
             . '</svg>';
     }

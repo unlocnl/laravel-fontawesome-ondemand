@@ -2,8 +2,8 @@
 
 namespace Unloc\FontAwesome\Support;
 
-// FA7 viewBoxes are trimmed to the grid, which official glyphs overflow into the canvas
-// padding; widening to the centered square canvas (as in svgs-full/) stops the clipping.
+// FA7 glyphs overflow their trimmed viewBox into the canvas padding; a centered square grid
+// with visible overflow renders them at FA's own scale in a square box without clipping.
 class SvgCanvas
 {
     private const CANVAS_RATIO = 1.25;
@@ -15,22 +15,19 @@ class SvgCanvas
         }
 
         return (string) preg_replace_callback(
-            '/(<svg\b[^>]*\sviewBox=")0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)(")/i',
+            '/<svg\b([^>]*\s)viewBox="0 0 (\d+(?:\.\d+)?) (\d+(?:\.\d+)?)"([^>]*)>/i',
             function (array $m): string {
                 $width = (float) $m[2];
                 $height = (float) $m[3];
-                $canvas = $height * self::CANVAS_RATIO;
 
-                if ($width > $canvas) {
+                if ($width > $height * self::CANVAS_RATIO) {
                     return $m[0];
                 }
 
-                return $m[1] . implode(' ', array_map($this->number(...), [
-                    -($canvas - $width) / 2,
-                    -($canvas - $height) / 2,
-                    $canvas,
-                    $canvas,
-                ])) . $m[4];
+                $viewBox = implode(' ', array_map($this->number(...), [-($height - $width) / 2, 0, $height, $height]));
+                $overflow = preg_match('/\soverflow=/i', $m[1] . $m[4]) ? '' : ' overflow="visible"';
+
+                return '<svg' . $m[1] . 'viewBox="' . $viewBox . '"' . $overflow . $m[4] . '>';
             },
             $svg,
             1,

@@ -49,7 +49,7 @@ function fakeMissing(): void
 it('fetches, sanitizes, stores on a miss', function () {
     fakeIcon('<svg viewBox="0 0 1 1"><!--!FA--><path/></svg>');
     $svg = manager()->get('gear');
-    expect($svg)->toBe('<svg viewBox="-0.125 -0.125 1.25 1.25"><path/></svg>');
+    expect($svg)->toBe('<svg viewBox="0 0 1 1" overflow="visible"><path/></svg>');
     Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
 });
 
