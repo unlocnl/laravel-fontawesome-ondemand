@@ -16,6 +16,7 @@ use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
 use Unloc\FontAwesome\Support\IconUrl;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
+use Unloc\FontAwesome\Support\SvgCanvas;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
 class FontAwesome
@@ -38,6 +39,7 @@ class FontAwesome
         private IconSourceChain $sources,
         private SvgSanitizer $sanitizer,
         private SvgAttributeMerger $merger,
+        private SvgCanvas $canvas,
         private string $defaultFamily,
         private string $defaultStyle,
         private string $defaultClasses,
@@ -302,7 +304,7 @@ class FontAwesome
 
     private function persist(IconReference $ref, string $html): string
     {
-        $svg = $this->sanitizer->sanitize($html);
+        $svg = $this->canvas->square($this->sanitizer->sanitize($html));
         $this->store->put($ref, $svg);
         $this->cache->put($ref, $svg);
 

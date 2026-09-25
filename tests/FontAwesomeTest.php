@@ -10,6 +10,7 @@ use Unloc\FontAwesome\Support\IconCache;
 use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
+use Unloc\FontAwesome\Support\SvgCanvas;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
 function manager(string $onError = 'placeholder', array $brands = [], ?Closure $isFolding = null, ?IconSourceChain $sources = null): FontAwesome
@@ -23,6 +24,7 @@ function manager(string $onError = 'placeholder', array $brands = [], ?Closure $
         sources: $sources ?? new IconSourceChain(),
         sanitizer: new SvgSanitizer(stripComments: true),
         merger: new SvgAttributeMerger(),
+        canvas: new SvgCanvas(7),
         defaultFamily: 'classic',
         defaultStyle: 'solid',
         defaultClasses: 'w-4 h-4',
@@ -46,7 +48,7 @@ function fakeMissing(): void
 it('fetches, sanitizes, stores on a miss', function () {
     fakeIcon('<svg viewBox="0 0 1 1"><!--!FA--><path/></svg>');
     $svg = manager()->get('gear');
-    expect($svg)->toBe('<svg viewBox="0 0 1 1"><path/></svg>');
+    expect($svg)->toBe('<svg viewBox="-0.125 -0.125 1.25 1.25"><path/></svg>');
     Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
 });
 
@@ -61,6 +63,7 @@ it('serves a disk hit without any http call', function () {
         sources: new IconSourceChain(),
         sanitizer: new SvgSanitizer(),
         merger: new SvgAttributeMerger(),
+        canvas: new SvgCanvas(7),
         defaultFamily: 'classic', defaultStyle: 'solid', defaultClasses: '', brands: [],
         onError: 'placeholder', placeholderPath: __DIR__ . '/../resources/svg/placeholder.svg',
     );

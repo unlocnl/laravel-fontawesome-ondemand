@@ -88,7 +88,7 @@ Icons inline by default: the full SVG markup is emitted at every usage. Where on
 ```
 
 ```html
-<svg viewBox="0 0 448 512" class="fill-current w-[1em] h-[1em]"><use href="/fontawesome/7/classic/solid/check.svg#i"/></svg>
+<svg viewBox="-96 -64 640 640" class="fill-current w-[1em] h-[1em]"><use href="/fontawesome/7/classic/solid/check.svg#i"/></svg>
 ```
 
 The icon travels once and the browser caches it; every further occurrence costs about 90 bytes and two DOM nodes rather than the full path data. That matters most for what is re-sent and re-diffed on every Livewire round trip, and least for a page rendered once — the trade is one request per unique icon on a cold cache, and icons that paint a frame later than the rest of the page.
@@ -154,7 +154,7 @@ Return raw SVG markup or `null`; the package sanitizes and merges attributes for
 
 Custom SVGs are inlined verbatim next to Font Awesome ones and get the same `classes` merged onto the root, so they only look right if they are drawn on comparable terms.
 
-1. **Draw on a 512-tall grid.** Font Awesome normalizes height, not width — `viewBox="0 0 512 512"` for `house`, `0 0 448 512` for `user`, `0 0 256 512` for `1`. Matching that height makes a custom icon sit at the same optical size in a line of text. The default `w-[1em] h-[1em]` is square, so a narrower glyph is centered in the box rather than stretched, exactly as Font Awesome's own narrow icons are.
+1. **Draw on Font Awesome's canvas.** Custom icons keep the `viewBox` they are authored with, so match the one Font Awesome icons render with (see [Icon canvas](#icon-canvas)). On version 7 that is `viewBox="0 0 640 640"` with the glyph inside the central 512-unit band (64–576 on the vertical axis), as in Font Awesome's own `svgs-full/` files. On version 6 it is a 512-tall grid with the width trimmed to the glyph — `0 0 512 512` for `house`, `0 0 448 512` for `user` — and the default square `w-[1em] h-[1em]` centers a narrower glyph rather than stretching it.
 2. **Always include `viewBox`; drop `width` and `height`.** Without a `viewBox` the sizing classes scale the viewport and not the artwork. Width and height attributes survive the merge and only add noise.
 3. **Never hardcode a color, unless the color is the icon.** Omit `fill` or set `fill="currentColor"`. A literal `fill="#f00"` on a child path outranks the root's inherited `fill-current`, so `text-*` utilities will not recolor it. Stroke-drawn icons need `stroke="currentColor"` and `fill="none"`. The exception is a brand mark whose color is part of the identity, or a multi-color logo that cannot be a single path — there, per-path fills are the right answer, and that same cascade rule is what keeps a stray `text-*` from breaking the mark. Font Awesome's own `brands` style is not this case: `spotify` and `google` both ship as one `currentColor` path and follow the text color like any other glyph.
 4. **Leave `class` off the root.** Classes are merged, not replaced — a root `class="w-6 h-6"` ends up alongside the default `w-[1em] h-[1em]` and stylesheet order decides the winner, not your markup. Pass per-usage classes on the component instead.
@@ -163,7 +163,7 @@ Custom SVGs are inlined verbatim next to Font Awesome ones and get the same `cla
 A well-formed custom icon is a root tag and paths, nothing else:
 
 ```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path d="M224 32 32 480h384L224 32z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 96 128 544h384L320 96z"/></svg>
 ```
 
 Exports from design tools usually carry inline `style` attributes and editor metadata; `sanitize.remove_attributes` strips those on the way in.
@@ -173,6 +173,10 @@ Exports from design tools usually carry inline `style` attributes and editor met
 Markup from a source is sanitized once on the way in, then cached — positively and negatively — in the same persistent cache as Font Awesome icons, so a database-backed source is queried once per icon. As with Font Awesome icons, **an edited icon takes effect after `php artisan fontawesome:clear`** (add `--views` when Blaze is installed).
 
 Custom icons are not written to the on-disk store, because the folder or the database is already the durable copy and a third one in `storage/app` would go stale unnoticed. The consequence is that they have one cache tier instead of two: with `cache.store` set to `false`, a Font Awesome icon still comes off disk, while a custom icon goes back to its source on every render.
+
+### Icon canvas
+
+Version 7 icons are stored on Font Awesome's square canvas. Both the API and the CDN serve a `viewBox` trimmed to the 512-unit grid (`0 0 448 512` for `check`), which official glyphs overflow into the canvas padding, so a `w-[1em] h-[1em]` box would clip them. The package widens it to the 640-unit canvas with the grid centered (`-96 -64 640 640`), the same geometry as Font Awesome's `svgs-full/` files: every icon fits a square box unclipped, and wide and narrow glyphs keep Font Awesome's relative sizes. Version 6 icons and custom icons keep their own `viewBox`.
 
 ### Facade
 
@@ -220,7 +224,7 @@ When [Livewire Blaze](https://github.com/livewire/blaze) is installed, this pack
 ```
 
 ```php
-<?php ob_start(); ?><svg viewBox="0 0 1 1" class="fill-current w-[1em] h-[1em] text-red-500"><path/></svg>
+<?php ob_start(); ?><svg viewBox="-64 -64 640 640" class="fill-current w-[1em] h-[1em] text-red-500"><path/></svg>
 ```
 
 No component render, no cache lookup, no disk read at runtime. Usages with a dynamically bound `name`, `family`, or `variant` (e.g. `:name="$icon"`) are left alone by Blaze and resolve at runtime as usual.

@@ -21,6 +21,7 @@ use Unloc\FontAwesome\Support\IconSourceChain;
 use Unloc\FontAwesome\Support\IconStore;
 use Unloc\FontAwesome\Support\IconUrl;
 use Unloc\FontAwesome\Support\SvgAttributeMerger;
+use Unloc\FontAwesome\Support\SvgCanvas;
 use Unloc\FontAwesome\Support\SvgSanitizer;
 
 class FontAwesomeServiceProvider extends PackageServiceProvider
@@ -94,6 +95,8 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(SvgAttributeMerger::class, fn () => new SvgAttributeMerger());
 
+        $this->app->singleton(SvgCanvas::class, fn () => new SvgCanvas($config('version', 7)));
+
         $this->app->singleton(IconUrl::class, fn () => new IconUrl(
             (string) $config('linked.prefix', 'fontawesome'),
             $config('version', 7),
@@ -112,6 +115,7 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             sources: $app->make(IconSourceChain::class),
             sanitizer: $app->make(SvgSanitizer::class),
             merger: $app->make(SvgAttributeMerger::class),
+            canvas: $app->make(SvgCanvas::class),
             defaultFamily: (string) $config('defaults.family', 'classic'),
             defaultStyle: (string) $config('defaults.style', 'solid'),
             defaultClasses: (string) $config('classes', ''),
