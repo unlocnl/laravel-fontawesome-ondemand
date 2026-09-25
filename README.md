@@ -33,7 +33,8 @@ All keys live in `config/fontawesome.php`.
 
 | Key | Description |
 |-|-|
-| `version` | Font Awesome release series, `6` or `7`. Used verbatim in the GraphQL `release(version: "{version}.x")` query and as the CDN package specifier `fontawesome-free@{version}`. Also namespaces the disk and cache keys. |
+| `version` | Font Awesome release series, `6` or `7`, used for every icon that doesn't override it. Used verbatim in the GraphQL `release(version: "{version}.x")` query and as the CDN package specifier `fontawesome-free@{version}`. Also namespaces the disk and cache keys. |
+| `versions` | Further release series an icon may select with its `version` attribute, e.g. `[6]`. Any other override throws `InvalidArgumentException`, and the icon route answers `version` and these only. See [Version override](#version-override). |
 | `source` | Reads `FONTAWESOME_SOURCE`. `auto` (default) serves free icons from the CDN and sends everything else — plus any CDN miss — to the GraphQL API when a token is set, and inverts that order for `fontawesome:prefetch` (see [Commands](#commands)); `cdn` uses jsDelivr only; `api` uses the GraphQL API only. An unrecognized value throws. |
 | `api_token` | Reads `FONTAWESOME_API_TOKEN`. Unlocks Pro families and styles, and lets `auto` fall through to the API for icons the free package lacks. The client exchanges it for a short-lived GraphQL token and caches that exchange. Without a token the API leg is skipped entirely. |
 | `endpoint` | Font Awesome GraphQL endpoint. Override for testing/mocking. |
@@ -45,7 +46,7 @@ All keys live in `config/fontawesome.php`.
 | `linked.prefix` | URL prefix the icon route answers on. `null` removes the route, and `linked` usages fall back to inlining. |
 | `linked.max_age` | `max-age` in seconds sent with each served icon, alongside `public` and `immutable`. |
 | `custom.path` | Directory the bundled filesystem source reads app-owned SVGs from. Style subfolders act as variants; root-level files answer any style. `null` disables it. See [Custom icons](#custom-icons). |
-| `prefetch` | List of icons to always warm via `fontawesome:prefetch`. Each entry is a string (icon name, uses defaults) or an array `['name' => ..., 'family' => ..., 'style' => ...]`. |
+| `prefetch` | List of icons to always warm via `fontawesome:prefetch`. Each entry is a string (icon name, uses defaults) or an array `['name' => ..., 'family' => ..., 'style' => ..., 'version' => ...]`. |
 | `scan_paths` | Extra directories (beyond `resource_path('views')` and `app_path()`) that `fontawesome:prefetch` scans for `<x-fa>` usages and `fa-prefetch/` markers. |
 | `disk` | Filesystem disk (from `config/filesystems.php`) used for the on-disk SVG cache. |
 | `path` | Root path within that disk where cached SVGs are stored. |
@@ -79,6 +80,21 @@ composer update-brands -- 6.x   # a specific release line
 
 This pulls the current brand set from Font Awesome's public GraphQL metadata (no API token required).
 
+### Version override
+
+An icon can come from a release series other than the configured `version`, once that series is listed in `versions`:
+
+```php
+'version' => 7,
+'versions' => [6],
+```
+
+```blade
+<x-fa name="house" version="6" />
+```
+
+The override applies to that icon alone: it is fetched from the `6.x` release (`fontawesome-free@6` on the CDN), stored and cached under its own version, keeps its version 6 `viewBox` (see [Icon canvas](#icon-canvas)), and links to a `/fontawesome/6/…` URL. A version outside `version` and `versions` throws `InvalidArgumentException`. The brand list is not version-specific, so a brand that exists only in the overridden release resolves through the `classic`/`brands` fallback.
+
 ### Linked icons
 
 Icons inline by default: the full SVG markup is emitted at every usage. Where one icon repeats many times on a page — a table with a status glyph on every row, a Livewire component re-rendering hundreds of them — `mode="linked"` emits a reference to a cacheable per-icon URL instead:
@@ -93,7 +109,7 @@ Icons inline by default: the full SVG markup is emitted at every usage. Where on
 
 The icon travels once and the browser caches it; every further occurrence costs about 90 bytes and two DOM nodes rather than the full path data. That matters most for what is re-sent and re-diffed on every Livewire round trip, and least for a page rendered once — the trade is one request per unique icon on a cold cache, and icons that paint a frame later than the rest of the page.
 
-Set `mode` to `linked` in the config to link everywhere and opt out per usage with `mode="inline"`. The route lives at `linked.prefix` and answers with `Cache-Control: public, max-age=…, immutable`; the URL carries the configured `version`, so a release bump invalidates every icon. Setting `linked.prefix` to `null` removes the route, and `linked` usages fall back to inlining.
+Set `mode` to `linked` in the config to link everywhere and opt out per usage with `mode="inline"`. The route lives at `linked.prefix` and answers with `Cache-Control: public, max-age=…, immutable`; the URL carries the icon's version, so a release bump invalidates every icon, and the route answers only `version` and `versions`. Setting `linked.prefix` to `null` removes the route, and `linked` usages fall back to inlining.
 
 Two constraints come with it. Styling stops at the shadow boundary: inherited properties reach the linked content — which is what makes the default `fill-current` work — but a rule targeting an inner path does not. And an icon that fails to resolve is inlined as your `on_error` result rather than linked.
 
@@ -185,9 +201,10 @@ use Unloc\FontAwesome\Facades\FontAwesome;
 
 FontAwesome::render('gear'); // Illuminate\Support\HtmlString, ready to echo
 FontAwesome::get('gear');    // raw sanitized SVG markup, or null if not found
+FontAwesome::get('house', version: 6);
 ```
 
-`render()` accepts `name`, `family`, `style` (the `<x-fa>` `variant` attribute maps to this parameter), plus an attributes array/`ComponentAttributeBag` for merging — it's what `<x-fa>` calls under the hood. `get()` returns the sanitized SVG string (or `null`) without attribute merging, useful for programmatic checks.
+`render()` accepts `name`, `family`, `style` (the `<x-fa>` `variant` attribute maps to this parameter), an attributes array/`ComponentAttributeBag` for merging, `mode`, and `version` — it's what `<x-fa>` calls under the hood. `get()` returns the sanitized SVG string (or `null`) without attribute merging, useful for programmatic checks.
 
 ### Commands
 
@@ -197,7 +214,7 @@ php artisan fontawesome:clear
 php artisan fontawesome:clear --views
 ```
 
-`fontawesome:prefetch` warms the cache for everything in `config('fontawesome.prefetch')` plus every static `<x-fa>` usage found by scanning `resource_path('views')` and any `scan_paths`. Usages with dynamic bindings (e.g. `:name="$icon"` or `{{ $var }}` interpolation) are skipped and counted, since the icon name can't be determined statically.
+`fontawesome:prefetch` warms the cache for everything in `config('fontawesome.prefetch')` plus every static `<x-fa>` usage found by scanning `resource_path('views')` and any `scan_paths`. A static `version` attribute is warmed under that version. Usages with dynamic bindings (e.g. `:name="$icon"` or `{{ $var }}` interpolation) are skipped and counted, since the icon name can't be determined statically. An entry or usage whose version is missing from `versions` fails the command, as it would fail to render.
 
 To prefetch icons the scan can't see, drop an `fa-prefetch/` marker in any file under `app_path()`, `resource_path('views')` or `scan_paths`, in whatever comment syntax the file uses:
 
@@ -207,9 +224,9 @@ To prefetch icons the scan can't see, drop an `fa-prefetch/` marker in any file 
 // fa-prefetch/angle-right
 ```
 
-The path reads `family/style/name`, filled from the right: `name` alone uses the default family and style, `style/name` uses the default family. Paths with more than three segments are ignored.
+The path reads `family/style/name`, filled from the right: `name` alone uses the default family and style, `style/name` uses the default family. Markers always use the configured `version`; paths with more than three segments are ignored.
 
-Warming runs in two phases — the requested icons, then brand fallbacks. On `api`, and on `auto` with a token, each phase is one batched GraphQL request, so several hundred icons cost two requests rather than several hundred; whatever the API doesn't answer falls back to the CDN. Without a token — `auto` with none, or `cdn` — every icon is its own CDN request, issued concurrently in waves of at most 25.
+Warming runs in two phases — the requested icons, then brand fallbacks. On `api`, and on `auto` with a token, each phase is one batched GraphQL request covering every version, so several hundred icons cost two requests rather than several hundred; whatever the API doesn't answer falls back to the CDN. Without a token — `auto` with none, or `cdn` — every icon is its own CDN request, issued concurrently in waves of at most 25.
 
 `fontawesome:clear` deletes cached SVGs from disk and flushes the persistent icon cache (scoped to the configured prefix — it never calls `Cache::flush()`). It leaves compiled Blade views untouched; pass `--views` to also run `view:clear`, which is what you want when Blaze has folded icons into them (see below).
 

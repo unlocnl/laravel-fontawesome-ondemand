@@ -18,13 +18,13 @@ it('does not negative-cache when the batch request fails', function () {
 
     Storage::disk('local')->assertMissing('fontawesome/7/classic/solid/gear.svg');
 
-    expect(app(IconCache::class)->get(new IconReference('gear', 'classic', 'solid')))->toBeNull();
+    expect(app(IconCache::class)->get(new IconReference('gear', 'classic', 'solid', '7')))->toBeNull();
 });
 
 it('negative-caches an icon the api reports as missing', function () {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => null]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => null]]])]);
 
     $this->artisan('fontawesome:prefetch')->assertSuccessful();
 
-    expect(app(IconCache::class)->get(new IconReference('gear', 'classic', 'solid')))->toBe(IconCache::NEGATIVE);
+    expect(app(IconCache::class)->get(new IconReference('gear', 'classic', 'solid', '7')))->toBe(IconCache::NEGATIVE);
 });

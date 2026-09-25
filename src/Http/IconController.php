@@ -8,19 +8,20 @@ use Unloc\FontAwesome\FontAwesome;
 
 class IconController
 {
+    /** @param list<string> $versions */
     public function __construct(
         private FontAwesome $fontAwesome,
-        private int|string $version,
+        private array $versions,
         private int $maxAge,
     ) {}
 
     public function __invoke(string $version, string $family, string $style, string $name): Response
     {
-        if ($version !== (string) $this->version) {
+        if (! in_array($version, $this->versions, true)) {
             throw new NotFoundHttpException;
         }
 
-        $svg = $this->fontAwesome->raw($name, $family, $style);
+        $svg = $this->fontAwesome->raw($name, $family, $style, $version);
         if ($svg === null) {
             throw new NotFoundHttpException;
         }

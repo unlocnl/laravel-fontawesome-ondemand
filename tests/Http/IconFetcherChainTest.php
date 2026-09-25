@@ -35,15 +35,15 @@ function leg(array|IconFetchFailedException $answers, ?array &$seen = null): Ico
     };
 }
 
-$gear = fn () => new IconReference('gear', 'classic', 'solid');
-$swirl = fn () => new IconReference('swirl', 'sharp', 'light');
+$gear = fn () => new IconReference('gear', 'classic', 'solid', '7');
+$swirl = fn () => new IconReference('swirl', 'sharp', 'light', '7');
 
 it('stops at the first leg that answers', function () use ($gear) {
     $second = null;
 
     $chain = new IconFetcherChain([
-        leg(['classic/solid/gear' => '<svg>cdn</svg>']),
-        leg(['classic/solid/gear' => '<svg>api</svg>'], $second),
+        leg(['7/classic/solid/gear' => '<svg>cdn</svg>']),
+        leg(['7/classic/solid/gear' => '<svg>api</svg>'], $second),
     ]);
 
     expect($chain->fetch($gear()))->toBe('<svg>cdn</svg>')
@@ -54,14 +54,14 @@ it('passes only the unanswered references to the next leg', function () use ($ge
     $second = null;
 
     $chain = new IconFetcherChain([
-        leg(['classic/solid/gear' => '<svg>cdn</svg>']),
-        leg(['sharp/light/swirl' => '<svg>api</svg>'], $second),
+        leg(['7/classic/solid/gear' => '<svg>cdn</svg>']),
+        leg(['7/sharp/light/swirl' => '<svg>api</svg>'], $second),
     ]);
 
     expect($chain->fetchMany([$gear(), $swirl()]))->toBe([
-        'classic/solid/gear' => '<svg>cdn</svg>',
-        'sharp/light/swirl' => '<svg>api</svg>',
-    ])->and($second)->toBe(['sharp/light/swirl']);
+        '7/classic/solid/gear' => '<svg>cdn</svg>',
+        '7/sharp/light/swirl' => '<svg>api</svg>',
+    ])->and($second)->toBe(['7/sharp/light/swirl']);
 });
 
 it('returns null for a reference no leg answers', function () use ($gear) {
@@ -73,7 +73,7 @@ it('returns null for a reference no leg answers', function () use ($gear) {
 it('lets a later leg cover an earlier one that failed', function () use ($gear) {
     $chain = new IconFetcherChain([
         leg(new IconFetchFailedException('cdn down')),
-        leg(['classic/solid/gear' => '<svg>api</svg>']),
+        leg(['7/classic/solid/gear' => '<svg>api</svg>']),
     ]);
 
     expect($chain->fetch($gear()))->toBe('<svg>api</svg>');
@@ -92,7 +92,7 @@ it('skips remaining legs once everything is answered', function () use ($gear) {
     $second = null;
 
     $chain = new IconFetcherChain([
-        leg(['classic/solid/gear' => '<svg>cdn</svg>']),
+        leg(['7/classic/solid/gear' => '<svg>cdn</svg>']),
         leg(new IconFetchFailedException('never reached'), $second),
     ]);
 
@@ -103,9 +103,9 @@ it('skips remaining legs once everything is answered', function () use ($gear) {
 it('deduplicates references before dispatching', function () use ($gear) {
     $first = null;
 
-    $chain = new IconFetcherChain([leg(['classic/solid/gear' => '<svg/>'], $first)]);
+    $chain = new IconFetcherChain([leg(['7/classic/solid/gear' => '<svg/>'], $first)]);
 
     $chain->fetchMany([$gear(), $gear()]);
 
-    expect($first)->toBe(['classic/solid/gear']);
+    expect($first)->toBe(['7/classic/solid/gear']);
 });

@@ -18,7 +18,6 @@ class JsDelivrClient implements IconFetcher
     public function __construct(
         private HttpFactory $http,
         private string $endpoint,
-        private int|string $version,
         private int $tries = 3,
         private int $maxRetryDelay = 5000,
         private int $concurrency = 25,
@@ -96,7 +95,7 @@ class JsDelivrClient implements IconFetcher
 
     private function url(IconReference $ref): string
     {
-        return "{$this->endpoint}/@fortawesome/fontawesome-free@{$this->version}/svgs/{$ref->style}/{$ref->name}.svg";
+        return "{$this->endpoint}/@fortawesome/fontawesome-free@{$ref->version}/svgs/{$ref->style}/{$ref->name}.svg";
     }
 
     private function retryWhen(): \Closure

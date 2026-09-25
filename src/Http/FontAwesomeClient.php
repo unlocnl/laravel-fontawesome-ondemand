@@ -57,7 +57,6 @@ class FontAwesomeClient implements IconFetcher
         private Repository $cache,
         private string $endpoint,
         private ?string $apiToken,
-        private int|string $version,
         private int $tries = 3,
         private int $maxRetryDelay = 5000,
     ) {}
@@ -67,7 +66,7 @@ class FontAwesomeClient implements IconFetcher
         return $this->fetchMany([$ref])[$ref->key()] ?? null;
     }
 
-    /** Resolves every reference in a single aliased GraphQL document. */
+    /** Resolves every reference in a single GraphQL document, one aliased release per version. */
     public function fetchMany(iterable $refs): array
     {
         $unique = [];
@@ -79,11 +78,12 @@ class FontAwesomeClient implements IconFetcher
             return [];
         }
 
-        $aliases = [];
-        $declarations = ['$version: String!'];
-        $selections = [];
-        $variables = ['version' => "{$this->version}.x"];
+        /** @var array<string,array{index:int,aliases:array<string,string>,selections:list<string>}> $releases */
+        $releases = [];
+        $declarations = [];
+        $variables = [];
         $results = [];
+        $i = 0;
 
         foreach ($unique as $key => $ref) {
             $family = self::FAMILY_MAP[$ref->family] ?? null;
@@ -96,29 +96,46 @@ class FontAwesomeClient implements IconFetcher
                 continue;
             }
 
-            $i = count($aliases);
+            if (! isset($releases[$ref->version])) {
+                $r = count($releases);
+                $releases[$ref->version] = ['index' => $r, 'aliases' => [], 'selections' => []];
+                $declarations[] = "\$version{$r}: String!";
+                $variables["version{$r}"] = "{$ref->version}.x";
+            }
+
             $alias = "i{$i}";
-            $aliases[$alias] = $ref->key();
+            $releases[$ref->version]['aliases'][$alias] = $key;
 
             $declarations[] = "\$name{$i}: String!";
             $declarations[] = "\$family{$i}: Family!";
             $declarations[] = "\$style{$i}: Style!";
 
-            $selections[] = "{$alias}: icon(name: \$name{$i}) { svgs(filter: { familyStyles: [{ family: \$family{$i}, style: \$style{$i} }] }) { html } }";
+            $releases[$ref->version]['selections'][] = "{$alias}: icon(name: \$name{$i}) { svgs(filter: { familyStyles: [{ family: \$family{$i}, style: \$style{$i} }] }) { html } }";
 
             $variables["name{$i}"] = $ref->name;
             $variables["family{$i}"] = $family;
             $variables["style{$i}"] = $style;
+            $i++;
         }
 
-        if ($aliases === []) {
+        if ($releases === []) {
             return $results;
         }
 
+        $fields = [];
+        foreach ($releases as $release) {
+            $fields[] = sprintf(
+                "r%d: release(version: \$version%d) {\n    %s\n  }",
+                $release['index'],
+                $release['index'],
+                implode("\n    ", $release['selections']),
+            );
+        }
+
         $query = sprintf(
-            "query Icons(%s) {\n  release(version: \$version) {\n    %s\n  }\n}",
+            "query Icons(%s) {\n  %s\n}",
             implode(', ', $declarations),
-            implode("\n    ", $selections),
+            implode("\n  ", $fields),
         );
 
         $json = $this->post($this->authenticated(), [
@@ -130,15 +147,17 @@ class FontAwesomeClient implements IconFetcher
             throw new IconFetchFailedException('GraphQL error: ' . json_encode($json['errors']));
         }
 
-        $release = $json['data']['release'] ?? null;
-        if (! is_array($release)) {
-            throw new IconFetchFailedException("No data for release {$this->version}.x.");
-        }
+        foreach ($releases as $version => $release) {
+            $data = $json['data']["r{$release['index']}"] ?? null;
+            if (! is_array($data)) {
+                throw new IconFetchFailedException("No data for release {$version}.x.");
+            }
 
-        foreach ($aliases as $alias => $key) {
-            // A missing icon comes back as an explicit null alias with no errors;
-            // an empty svgs list means the icon exists but not in that family/style.
-            $results[$key] = $release[$alias]['svgs'][0]['html'] ?? null;
+            foreach ($release['aliases'] as $alias => $key) {
+                // A missing icon comes back as an explicit null alias with no errors;
+                // an empty svgs list means the icon exists but not in that family/style.
+                $results[$key] = $data[$alias]['svgs'][0]['html'] ?? null;
+            }
         }
 
         return $results;

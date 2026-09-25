@@ -2,6 +2,9 @@
 
 return [
     'version' => 7,
+    // Releases an icon may override `version` with, e.g. <x-fa name="house" version="6" />.
+    // The icon route answers these and `version` only.
+    'versions' => [],
     // Where SVG markup comes from.
     //   'auto' free icons (classic solid/regular/brands) from the jsDelivr CDN, everything
     //          else — and any CDN miss — from the GraphQL API when a token is configured.

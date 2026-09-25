@@ -18,15 +18,16 @@ function manager(string $onError = 'placeholder', array $brands = [], ?Closure $
     Storage::fake('local');
 
     return new FontAwesome(
-        store: new IconStore(Storage::disk('local'), 'fontawesome', 7),
-        cache: new IconCache(app('cache'), 'array', null, 3600, 'fa_ondemand:', 7),
-        client: new FontAwesomeClient(app(\Illuminate\Http\Client\Factory::class), app('cache')->store('array'), 'https://api.fontawesome.com', null, 7),
+        store: new IconStore(Storage::disk('local'), 'fontawesome'),
+        cache: new IconCache(app('cache'), 'array', null, 3600, 'fa_ondemand:'),
+        client: new FontAwesomeClient(app(\Illuminate\Http\Client\Factory::class), app('cache')->store('array'), 'https://api.fontawesome.com', null),
         sources: $sources ?? new IconSourceChain(),
         sanitizer: new SvgSanitizer(stripComments: true),
         merger: new SvgAttributeMerger(),
-        canvas: new SvgCanvas(7),
+        canvas: new SvgCanvas(),
         defaultFamily: 'classic',
         defaultStyle: 'solid',
+        defaultVersion: '7',
         defaultClasses: 'w-4 h-4',
         brands: $brands,
         onError: $onError,
@@ -37,12 +38,12 @@ function manager(string $onError = 'placeholder', array $brands = [], ?Closure $
 
 function fakeIcon(string $html): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => $html]]]]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => $html]]]]]])]);
 }
 
 function fakeMissing(): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => null]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => null]]])]);
 }
 
 it('fetches, sanitizes, stores on a miss', function () {
@@ -57,14 +58,14 @@ it('serves a disk hit without any http call', function () {
     Storage::disk('local')->put('fontawesome/7/classic/solid/gear.svg', '<svg>disk</svg>');
     Http::fake();
     $m = new FontAwesome(
-        store: new IconStore(Storage::disk('local'), 'fontawesome', 7),
-        cache: new IconCache(app('cache'), false, null, 3600, 'fa_ondemand:', 7),
-        client: new FontAwesomeClient(app(\Illuminate\Http\Client\Factory::class), app('cache')->store('array'), 'https://api.fontawesome.com', null, 7),
+        store: new IconStore(Storage::disk('local'), 'fontawesome'),
+        cache: new IconCache(app('cache'), false, null, 3600, 'fa_ondemand:'),
+        client: new FontAwesomeClient(app(\Illuminate\Http\Client\Factory::class), app('cache')->store('array'), 'https://api.fontawesome.com', null),
         sources: new IconSourceChain(),
         sanitizer: new SvgSanitizer(),
         merger: new SvgAttributeMerger(),
-        canvas: new SvgCanvas(7),
-        defaultFamily: 'classic', defaultStyle: 'solid', defaultClasses: '', brands: [],
+        canvas: new SvgCanvas(),
+        defaultFamily: 'classic', defaultStyle: 'solid', defaultVersion: '7', defaultClasses: '', brands: [],
         onError: 'placeholder', placeholderPath: __DIR__ . '/../resources/svg/placeholder.svg',
     );
     expect($m->get('gear'))->toBe('<svg>disk</svg>');
@@ -77,7 +78,7 @@ it('short-circuits known brands with a single query', function () {
         $vars = json_decode($request->body(), true)['variables'];
         $sent[] = "{$vars['family0']}/{$vars['style0']}";
 
-        return Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg>gh</svg>']]]]]]);
+        return Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg>gh</svg>']]]]]]);
     });
 
     expect(manager(brands: ['github'])->get('github'))->toBe('<svg>gh</svg>');
@@ -91,7 +92,7 @@ it('falls back to brands after a classic miss for unknown names', function () {
         $sent[] = $style;
         $icon = $style === 'BRANDS' ? ['svgs' => [['html' => '<svg>x</svg>']]] : null;
 
-        return Http::response(['data' => ['release' => ['i0' => $icon]]]);
+        return Http::response(['data' => ['r0' => ['i0' => $icon]]]);
     });
 
     expect(manager()->get('some-brand'))->toBe('<svg>x</svg>');
@@ -169,12 +170,12 @@ class RecordingIconSource implements \Unloc\FontAwesome\Contracts\CustomIconSour
 
 function customCache(): IconCache
 {
-    return new IconCache(app('cache'), 'array', null, 3600, 'fa_ondemand:', 7);
+    return new IconCache(app('cache'), 'array', null, 3600, 'fa_ondemand:');
 }
 
 function customRef(string $name, string $style = 'solid'): \Unloc\FontAwesome\Support\IconReference
 {
-    return new \Unloc\FontAwesome\Support\IconReference($name, 'custom', $style);
+    return new \Unloc\FontAwesome\Support\IconReference($name, 'custom', $style, '7');
 }
 
 it('resolves a c- prefixed icon from the chain without touching the api', function () {

@@ -6,12 +6,12 @@ use Unloc\FontAwesome\Support\IconStore;
 
 function store(): IconStore
 {
-    return new IconStore(Storage::disk('local'), 'fontawesome', 7);
+    return new IconStore(Storage::disk('local'), 'fontawesome');
 }
 
 it('returns null on a miss and stores under the versioned path', function () {
     Storage::fake('local');
-    $ref = new IconReference('gear', 'classic', 'solid');
+    $ref = new IconReference('gear', 'classic', 'solid', '7');
 
     expect(store()->get($ref))->toBeNull();
 
@@ -24,7 +24,7 @@ it('returns null on a miss and stores under the versioned path', function () {
 
 it('clears the whole tree', function () {
     Storage::fake('local');
-    $ref = new IconReference('gear', 'classic', 'solid');
+    $ref = new IconReference('gear', 'classic', 'solid', '7');
     store()->put($ref, '<svg/>');
 
     store()->clear();

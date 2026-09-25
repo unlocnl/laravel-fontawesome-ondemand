@@ -9,7 +9,6 @@ class IconStore
     public function __construct(
         private Filesystem $disk,
         private string $basePath,
-        private int|string $version,
     ) {}
 
     public function get(IconReference $ref): ?string
@@ -36,6 +35,6 @@ class IconStore
 
     private function path(IconReference $ref): string
     {
-        return "{$this->basePath}/{$this->version}/{$ref->family}/{$ref->style}/{$ref->name}.svg";
+        return "{$this->basePath}/{$ref->key()}.svg";
     }
 }

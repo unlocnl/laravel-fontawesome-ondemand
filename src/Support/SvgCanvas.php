@@ -8,11 +8,9 @@ class SvgCanvas
 {
     private const CANVAS_RATIO = 1.25;
 
-    public function __construct(private int|string $version) {}
-
-    public function square(string $svg): string
+    public function square(string $svg, string $version): string
     {
-        if ((int) $this->version < 7) {
+        if ((int) $version < 7) {
             return $svg;
         }
 

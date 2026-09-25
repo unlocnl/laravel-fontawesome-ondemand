@@ -14,7 +14,7 @@ function fakeLinkedIcon(?string $viewBox = '0 0 448 512'): void
 {
     $svgs = $viewBox === null ? [] : [['html' => '<svg viewBox="' . $viewBox . '"><path/></svg>']];
 
-    Http::fake(fn () => Http::response(['data' => ['release' => ['i0' => ['svgs' => $svgs]]]]));
+    Http::fake(fn () => Http::response(['data' => ['r0' => ['i0' => ['svgs' => $svgs]]]]));
 }
 
 function linkedCustomIconPath(string $svg): string
@@ -63,8 +63,8 @@ it('points a brand icon at the reference that actually answered', function () {
         $style = json_decode($request->body(), true)['variables']['style0'] ?? null;
 
         return $style === 'BRANDS'
-            ? Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 496 512"><path/></svg>']]]]]])
-            : Http::response(['data' => ['release' => ['i0' => ['svgs' => []]]]]);
+            ? Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 496 512"><path/></svg>']]]]]])
+            : Http::response(['data' => ['r0' => ['i0' => ['svgs' => []]]]]);
     });
 
     expect(Blade::render('<x-fa name="github" mode="linked" />'))
@@ -115,6 +115,18 @@ it('404s a stale version and an unresolvable icon', function () {
 
     $this->get('/fontawesome/6/classic/solid/gear.svg')->assertNotFound();
     $this->get('/fontawesome/7/classic/solid/nope.svg')->assertNotFound();
+});
+
+it('serves an allowlisted version from its own release', function () {
+    fakeLinkedIcon();
+    config()->set('fontawesome.versions', [6]);
+
+    $content = $this->get('/fontawesome/6/classic/solid/gear.svg')->assertOk()->content();
+
+    expect($content)->toContain('viewBox="0 0 448 512"');
+    Http::assertSent(fn ($r) => $r['variables']['version0'] === '6.x');
+    Storage::disk('local')->assertExists('fontawesome/6/classic/solid/gear.svg');
+    $this->get('/fontawesome/5/classic/solid/gear.svg')->assertNotFound();
 });
 
 it('drops the route and the use markup when the prefix is disabled', function () {

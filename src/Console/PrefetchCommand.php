@@ -25,7 +25,7 @@ class PrefetchCommand extends Command
         return self::SUCCESS;
     }
 
-    /** @return list<array{name:string,family?:string,style?:string}> */
+    /** @return list<array{name:string,family?:string,style?:string,version?:int|string}> */
     private function entries(): array
     {
         $entries = [];
@@ -41,7 +41,7 @@ class PrefetchCommand extends Command
         return $this->dedupe($entries);
     }
 
-    /** @return list<array{name:string,family?:string,style?:string}> */
+    /** @return list<array{name:string,family?:string,style?:string,version?:int|string}> */
     private function scan(): array
     {
         $paths = array_merge([resource_path('views'), app_path()], (array) config('fontawesome.scan_paths', []));
@@ -74,6 +74,7 @@ class PrefetchCommand extends Command
                         'name' => $attrs['name'],
                         'family' => $attrs['family'] ?? null,
                         'style' => $attrs['variant'] ?? null,
+                        'version' => $attrs['version'] ?? null,
                     ], fn ($v) => $v !== null);
                 }
             }
@@ -82,7 +83,7 @@ class PrefetchCommand extends Command
         return $found;
     }
 
-    /** @return list<array{name:string,family?:string,style?:string}> */
+    /** @return list<array{name:string,family?:string,style?:string,version?:int|string}> */
     private function markers(string $content): array
     {
         preg_match_all('/fa-prefetch\/([A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*)/', $content, $matches);
@@ -143,7 +144,7 @@ class PrefetchCommand extends Command
     {
         $seen = [];
         foreach ($entries as $entry) {
-            $key = ($entry['name'] ?? '') . '|' . ($entry['family'] ?? '') . '|' . ($entry['style'] ?? '');
+            $key = ($entry['name'] ?? '') . '|' . ($entry['family'] ?? '') . '|' . ($entry['style'] ?? '') . '|' . ($entry['version'] ?? '');
             $seen[$key] = $entry;
         }
 

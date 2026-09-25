@@ -19,12 +19,12 @@ beforeEach(function () {
 // Http::fake() appends stubs and the first match wins, so each test registers its own.
 function fakeHit(): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
 }
 
 function fakeMiss(): void
 {
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => null]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => null]]])]);
 }
 
 it('folds a statically named icon into the compiled template', function () {
@@ -35,6 +35,16 @@ it('folds a statically named icon into the compiled template', function () {
     expect($compiled)->toContain('<svg viewBox="-0.125 -0.125 1.25 1.25"')
         ->toContain('class="w-4 h-4 text-red-500"')
         ->not->toContain('pushData');
+});
+
+it('folds a version override', function () {
+    fakeHit();
+    config()->set('fontawesome.versions', [6]);
+
+    expect(Blade::compileString('<x-fa name="gear" version="6" />'))
+        ->toContain('<svg viewBox="0 0 1 1"')
+        ->not->toContain('pushData');
+    Storage::disk('local')->assertExists('fontawesome/6/classic/solid/gear.svg');
 });
 
 it('leaves a dynamically named icon to resolve at runtime', function () {

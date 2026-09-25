@@ -1,2 +1,2 @@
-@props(['name', 'family' => null, 'variant' => null, 'mode' => null])
-{{ \Unloc\FontAwesome\Facades\FontAwesome::render($name, $family, $variant, $attributes, $mode) }}
+@props(['name', 'family' => null, 'variant' => null, 'mode' => null, 'version' => null])
+{{ \Unloc\FontAwesome\Facades\FontAwesome::render($name, $family, $variant, $attributes, $mode, $version) }}

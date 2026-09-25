@@ -59,13 +59,13 @@ it('falls through to the api for a pro style on auto', function () {
         'cdn.jsdelivr.net/*' => Http::response('missing', 404),
         'api.fontawesome.com/token' => Http::response(['access_token' => 'ACCESS', 'expires_in' => 3600]),
         'api.fontawesome.com' => Http::response([
-            'data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg>pro</svg>']]]]],
+            'data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg>pro</svg>']]]]],
         ]),
     ]);
 
     expect(fetcher('auto', 'TOKEN')->fetchMany([
-        new Unloc\FontAwesome\Support\IconReference('gear', 'sharp', 'light'),
-    ]))->toBe(['sharp/light/gear' => '<svg>pro</svg>']);
+        new Unloc\FontAwesome\Support\IconReference('gear', 'sharp', 'light', '7'),
+    ]))->toBe(['7/sharp/light/gear' => '<svg>pro</svg>']);
 
     Http::assertNotSent(fn ($r) => str_contains($r->url(), 'cdn.jsdelivr.net'));
 });
@@ -75,13 +75,13 @@ it('falls through to the api when the cdn misses a free path', function () {
         'cdn.jsdelivr.net/*' => Http::response('missing', 404),
         'api.fontawesome.com/token' => Http::response(['access_token' => 'ACCESS', 'expires_in' => 3600]),
         'api.fontawesome.com' => Http::response([
-            'data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg>pro</svg>']]]]],
+            'data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg>pro</svg>']]]]],
         ]),
     ]);
 
     expect(fetcher('auto', 'TOKEN')->fetchMany([
-        new Unloc\FontAwesome\Support\IconReference('gear', 'classic', 'solid'),
-    ]))->toBe(['classic/solid/gear' => '<svg>pro</svg>']);
+        new Unloc\FontAwesome\Support\IconReference('gear', 'classic', 'solid', '7'),
+    ]))->toBe(['7/classic/solid/gear' => '<svg>pro</svg>']);
 
     Http::assertSent(fn ($r) => str_contains($r->url(), 'cdn.jsdelivr.net'));
 });
@@ -98,7 +98,7 @@ it('warms a pro install through one graphql request and never touches the cdn', 
 
     Http::fake([
         'api.fontawesome.com/token' => Http::response(['access_token' => 'ACCESS', 'expires_in' => 3600]),
-        'api.fontawesome.com' => Http::response(['data' => ['release' => [
+        'api.fontawesome.com' => Http::response(['data' => ['r0' => [
             'i0' => ['svgs' => [['html' => '<svg>house</svg>']]],
             'i1' => ['svgs' => [['html' => '<svg>heart</svg>']]],
             'i2' => ['svgs' => [['html' => '<svg>gear</svg>']]],
@@ -110,6 +110,31 @@ it('warms a pro install through one graphql request and never touches the cdn', 
 
     Http::assertNotSent(fn ($r) => str_contains($r->url(), 'cdn.jsdelivr.net'));
     Http::assertSentCount(2); // 1 token exchange + 1 batched graphql document
+});
+
+it('warms several versions through one graphql request', function () {
+    Storage::fake('local');
+    config([
+        'fontawesome.source' => 'api',
+        'fontawesome.versions' => [6],
+    ]);
+    app()->forgetInstance(IconFetcher::class);
+    app()->forgetInstance(Unloc\FontAwesome\FontAwesome::class);
+
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => [
+        'r0' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"/>']]]],
+        'r1' => ['i1' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"/>']]]],
+    ]])]);
+
+    $results = app(Unloc\FontAwesome\FontAwesome::class)->warm([
+        ['name' => 'gear', 'version' => 6],
+        ['name' => 'gear'],
+    ]);
+
+    expect($results)->toBe([true, true]);
+    Http::assertSentCount(1);
+    Storage::disk('local')->assertExists('fontawesome/6/classic/solid/gear.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
 });
 
 it('still renders through the cdn on the same pro install', function () {

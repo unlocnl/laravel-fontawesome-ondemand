@@ -8,7 +8,7 @@ beforeEach(function () {
     Storage::fake('local');
     config()->set('fontawesome.disk', 'local');
     config()->set('fontawesome.classes', 'w-4 h-4');
-    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
+    Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]])]);
 });
 
 it('renders the x-fa component with merged classes and attributes', function () {
@@ -27,7 +27,7 @@ it('uses the variant attribute to select the icon style and forwards style as a 
     Http::fake(function ($request) use (&$sent) {
         $sent[] = json_decode($request->body(), true)['variables']['style0'] ?? null;
 
-        return Http::response(['data' => ['release' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]]);
+        return Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg viewBox="0 0 1 1"><path/></svg>']]]]]]);
     });
 
     $html = Blade::render('<x-fa name="heart" variant="regular" style="color:red" />');
@@ -79,10 +79,40 @@ it('keeps the brands fallback when family and variant are blank', function () {
         $vars = json_decode($request->body(), true)['variables'];
         $sent[] = [$vars['family0'], $vars['style0']];
 
-        return Http::response(['data' => ['release' => ['i0' => ['svgs' => []]]]]);
+        return Http::response(['data' => ['r0' => ['i0' => ['svgs' => []]]]]);
     });
 
     Blade::render('<x-fa name="github" family="" variant="" />');
 
     expect($sent)->toBe([['CLASSIC', 'BRANDS']]);
+});
+
+it('fetches an allowlisted version override from its own release and store', function () {
+    config()->set('fontawesome.versions', [6]);
+
+    $six = \Unloc\FontAwesome\Facades\FontAwesome::get('gear', version: 6);
+    $seven = \Unloc\FontAwesome\Facades\FontAwesome::get('gear');
+
+    expect($six)->toContain('viewBox="0 0 1 1"')
+        ->and($seven)->toContain('viewBox="-0.125 -0.125 1.25 1.25"');
+    Http::assertSent(fn ($r) => $r['variables']['version0'] === '6.x');
+    Http::assertSent(fn ($r) => $r['variables']['version0'] === '7.x');
+    Storage::disk('local')->assertExists('fontawesome/6/classic/solid/gear.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
+});
+
+it('treats a blank version as the configured one', function () {
+    expect(\Unloc\FontAwesome\Facades\FontAwesome::get('gear', version: ''))->toContain('<svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
+});
+
+it('throws on a version missing from the allowlist', function () {
+    \Unloc\FontAwesome\Facades\FontAwesome::get('gear', version: 5);
+})->throws(InvalidArgumentException::class, 'Font Awesome version [5] is not listed in fontawesome.versions.');
+
+it('links an overridden icon under its own version', function () {
+    config()->set('fontawesome.versions', [6]);
+
+    expect(Blade::render('<x-fa name="gear" version="6" mode="linked" />'))
+        ->toContain('<use href="/fontawesome/6/classic/solid/gear.svg#i"/>');
 });

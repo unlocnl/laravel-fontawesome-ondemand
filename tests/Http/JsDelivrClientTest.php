@@ -6,12 +6,12 @@ use Unloc\FontAwesome\Exceptions\IconFetchFailedException;
 use Unloc\FontAwesome\Http\JsDelivrClient;
 use Unloc\FontAwesome\Support\IconReference;
 
-function cdn(int|string $version = 7): JsDelivrClient
+function cdn(): JsDelivrClient
 {
-    return new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', $version, tries: 1);
+    return new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', tries: 1);
 }
 
-$gear = fn () => new IconReference('gear', 'classic', 'solid');
+$gear = fn () => new IconReference('gear', 'classic', 'solid', '7');
 
 it('fetches an icon from the versioned free package without auth', function () use ($gear) {
     Http::fake(['cdn.jsdelivr.net/*' => Http::response('<svg>gear</svg>')]);
@@ -22,10 +22,10 @@ it('fetches an icon from the versioned free package without auth', function () u
         && ! $r->hasHeader('Authorization'));
 });
 
-it('uses the configured version in the package specifier', function () use ($gear) {
+it('uses the reference version in the package specifier', function () {
     Http::fake(['cdn.jsdelivr.net/*' => Http::response('<svg/>')]);
 
-    cdn(6)->fetch($gear());
+    cdn()->fetch(new IconReference('gear', 'classic', 'solid', '6'));
 
     Http::assertSent(fn ($r) => str_contains($r->url(), 'fontawesome-free@6/svgs/solid/gear.svg'));
 });
@@ -47,9 +47,9 @@ it('answers unsupported families and styles without a request', function () {
 
     $client = cdn();
 
-    expect($client->fetch(new IconReference('gear', 'sharp', 'solid')))->toBeNull()
-        ->and($client->fetch(new IconReference('gear', 'classic', 'light')))->toBeNull()
-        ->and($client->fetch(new IconReference('gear', 'nonsense', 'solid')))->toBeNull();
+    expect($client->fetch(new IconReference('gear', 'sharp', 'solid', '7')))->toBeNull()
+        ->and($client->fetch(new IconReference('gear', 'classic', 'light', '7')))->toBeNull()
+        ->and($client->fetch(new IconReference('gear', 'nonsense', 'solid', '7')))->toBeNull();
 
     Http::assertNothingSent();
 });
@@ -58,7 +58,7 @@ it('accepts every free style', function () {
     Http::fake(['cdn.jsdelivr.net/*' => Http::response('<svg/>')]);
 
     foreach (['solid', 'regular', 'brands'] as $style) {
-        expect(cdn()->fetch(new IconReference('gear', 'classic', $style)))->toBe('<svg/>');
+        expect(cdn()->fetch(new IconReference('gear', 'classic', $style, '7')))->toBe('<svg/>');
     }
 
     Http::assertSentCount(3);
@@ -68,16 +68,16 @@ it('pools one request per unique reference and skips unsupported ones', function
     Http::fake(['cdn.jsdelivr.net/*' => Http::response('<svg/>')]);
 
     $results = cdn()->fetchMany([
-        new IconReference('gear', 'classic', 'solid'),
-        new IconReference('gear', 'classic', 'solid'),
-        new IconReference('github', 'classic', 'brands'),
-        new IconReference('gear', 'sharp', 'solid'),
+        new IconReference('gear', 'classic', 'solid', '7'),
+        new IconReference('gear', 'classic', 'solid', '7'),
+        new IconReference('github', 'classic', 'brands', '7'),
+        new IconReference('gear', 'sharp', 'solid', '7'),
     ]);
 
     expect($results)->toBe([
-        'sharp/solid/gear' => null,
-        'classic/solid/gear' => '<svg/>',
-        'classic/brands/github' => '<svg/>',
+        '7/sharp/solid/gear' => null,
+        '7/classic/solid/gear' => '<svg/>',
+        '7/classic/brands/github' => '<svg/>',
     ]);
 
     Http::assertSentCount(2);
@@ -90,11 +90,11 @@ it('keys a mixed batch by reference and maps each outcome', function () {
     ]);
 
     expect(cdn()->fetchMany([
-        new IconReference('gear', 'classic', 'solid'),
-        new IconReference('ghost-of-an-icon', 'classic', 'solid'),
+        new IconReference('gear', 'classic', 'solid', '7'),
+        new IconReference('ghost-of-an-icon', 'classic', 'solid', '7'),
     ]))->toBe([
-        'classic/solid/gear' => '<svg>gear</svg>',
-        'classic/solid/ghost-of-an-icon' => null,
+        '7/classic/solid/gear' => '<svg>gear</svg>',
+        '7/classic/solid/ghost-of-an-icon' => null,
     ]);
 });
 
@@ -112,7 +112,7 @@ it('retries a server error inside the pool', function () use ($gear) {
         ->push('<svg>gear</svg>'),
     ]);
 
-    $client = new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', 7, tries: 3);
+    $client = new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', tries: 3);
 
     expect($client->fetch($gear()))->toBe('<svg>gear</svg>');
     Http::assertSentCount(2);
@@ -121,7 +121,7 @@ it('retries a server error inside the pool', function () use ($gear) {
 it('does not retry a 404', function () use ($gear) {
     Http::fake(['cdn.jsdelivr.net/*' => Http::response('missing', 404)]);
 
-    $client = new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', 7, tries: 3);
+    $client = new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', tries: 3);
 
     expect($client->fetch($gear()))->toBeNull();
     Http::assertSentCount(1);
@@ -134,15 +134,15 @@ it('resolves a batch larger than the concurrency cap, keyed correctly', function
         return Http::response("<svg>{$m[1]}</svg>");
     });
 
-    $client = new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', 7, concurrency: 3);
+    $client = new JsDelivrClient(app(HttpFactory::class), 'https://cdn.jsdelivr.net/npm', concurrency: 3);
 
-    $refs = array_map(fn (int $i) => new IconReference("icon-{$i}", 'classic', 'solid'), range(1, 12));
+    $refs = array_map(fn (int $i) => new IconReference("icon-{$i}", 'classic', 'solid', '7'), range(1, 12));
 
     $results = $client->fetchMany($refs);
 
     expect($results)->toHaveCount(12)
-        ->and($results['classic/solid/icon-1'])->toBe('<svg>icon-1</svg>')
-        ->and($results['classic/solid/icon-12'])->toBe('<svg>icon-12</svg>');
+        ->and($results['7/classic/solid/icon-1'])->toBe('<svg>icon-1</svg>')
+        ->and($results['7/classic/solid/icon-12'])->toBe('<svg>icon-12</svg>');
 
     Http::assertSentCount(12);
 });

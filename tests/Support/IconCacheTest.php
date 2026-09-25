@@ -4,8 +4,8 @@ use Illuminate\Support\Facades\Cache;
 use Unloc\FontAwesome\Support\IconCache;
 use Unloc\FontAwesome\Support\IconReference;
 
-$cacheFactory = fn (string|false|null $store = 'array'): IconCache => new IconCache(app('cache'), $store, null, 3600, 'fa_ondemand:', 7);
-$ref = fn () => new IconReference('gear', 'classic', 'solid');
+$cacheFactory = fn (string|false|null $store = 'array'): IconCache => new IconCache(app('cache'), $store, null, 3600, 'fa_ondemand:');
+$ref = fn () => new IconReference('gear', 'classic', 'solid', '7');
 
 it('is disabled when no store is configured', function () use ($ref, $cacheFactory) {
     $c = $cacheFactory(false);

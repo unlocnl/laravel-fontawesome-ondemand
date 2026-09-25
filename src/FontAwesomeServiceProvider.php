@@ -41,11 +41,14 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
     public function packageRegistered(): void
     {
         $config = fn (string $key, $default = null) => $this->app['config']->get("fontawesome.{$key}", $default);
+        $versions = fn (): array => array_values(array_unique(array_map(
+            strval(...),
+            [$config('version', 7), ...(array) $config('versions', [])],
+        )));
 
         $this->app->singleton(IconStore::class, fn () => new IconStore(
             Storage::disk($config('disk', 'local')),
             $config('path', 'fontawesome'),
-            $config('version', 7),
         ));
 
         $this->app->singleton(IconCache::class, fn ($app) => new IconCache(
@@ -54,7 +57,6 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             $config('cache.ttl'),
             (int) $config('cache.negative_ttl', 3600),
             (string) $config('cache.prefix', 'fa_ondemand:'),
-            $config('version', 7),
         ));
 
         $this->app->singleton(FontAwesomeClient::class, fn ($app) => new FontAwesomeClient(
@@ -62,13 +64,11 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             $app->make(CacheFactory::class)->store(),
             (string) $config('endpoint', 'https://api.fontawesome.com'),
             $config('api_token'),
-            $config('version', 7),
         ));
 
         $this->app->singleton(JsDelivrClient::class, fn ($app) => new JsDelivrClient(
             $app->make(HttpFactory::class),
             (string) $config('cdn_endpoint', 'https://cdn.jsdelivr.net/npm'),
-            $config('version', 7),
         ));
 
         $this->app->singleton(IconFetcher::class, function ($app) use ($config) {
@@ -95,16 +95,15 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(SvgAttributeMerger::class, fn () => new SvgAttributeMerger());
 
-        $this->app->singleton(SvgCanvas::class, fn () => new SvgCanvas($config('version', 7)));
+        $this->app->singleton(SvgCanvas::class, fn () => new SvgCanvas());
 
         $this->app->singleton(IconUrl::class, fn () => new IconUrl(
             (string) $config('linked.prefix', 'fontawesome'),
-            $config('version', 7),
         ));
 
         $this->app->singleton(IconController::class, fn ($app) => new IconController(
             $app->make(FontAwesome::class),
-            $config('version', 7),
+            $versions(),
             (int) $config('linked.max_age', 31536000),
         ));
 
@@ -118,6 +117,7 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
             canvas: $app->make(SvgCanvas::class),
             defaultFamily: (string) $config('defaults.family', 'classic'),
             defaultStyle: (string) $config('defaults.style', 'solid'),
+            defaultVersion: (string) $config('version', 7),
             defaultClasses: (string) $config('classes', ''),
             brands: require __DIR__ . '/../resources/brands.php',
             onError: (string) $config('on_error', 'placeholder'),
@@ -131,6 +131,7 @@ class FontAwesomeServiceProvider extends PackageServiceProvider
                 : null,
             url: $config('linked.prefix', 'fontawesome') === null ? null : $app->make(IconUrl::class),
             defaultMode: (string) $config('mode', FontAwesome::INLINE),
+            versions: $versions(),
         ));
     }
 

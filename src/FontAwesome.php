@@ -31,7 +31,10 @@ class FontAwesome
     /** @var array<string,?string> */
     private array $memo = [];
 
-    /** @param list<string> $brands */
+    /**
+     * @param  list<string>  $brands
+     * @param  list<string>  $versions
+     */
     public function __construct(
         private IconStore $store,
         private IconCache $cache,
@@ -42,6 +45,7 @@ class FontAwesome
         private SvgCanvas $canvas,
         private string $defaultFamily,
         private string $defaultStyle,
+        private string $defaultVersion,
         private string $defaultClasses,
         private array $brands,
         private string $onError,
@@ -50,30 +54,31 @@ class FontAwesome
         private ?IconFetcher $warmClient = null,
         private ?IconUrl $url = null,
         private string $defaultMode = self::INLINE,
+        private array $versions = [],
     ) {}
 
-    public function get(string $name, ?string $family = null, ?string $style = null): ?string
+    public function get(string $name, ?string $family = null, ?string $style = null, int|string|null $version = null): ?string
     {
-        return $this->locate($name, $family, $style)['svg'] ?? null;
+        return $this->locate($name, $family, $style, $version)['svg'] ?? null;
     }
 
     /** Resolves an exact reference, as encoded in an icon URL. */
-    public function raw(string $name, string $family, string $style): ?string
+    public function raw(string $name, string $family, string $style, string $version): ?string
     {
         $name = strtolower(trim($name));
         $family = strtolower(trim($family));
         $style = strtolower(trim($style));
 
         return $family === 'custom'
-            ? $this->custom($name, $style)
-            : $this->resolve(new IconReference($name, $family, $style));
+            ? $this->custom($name, $style, $version)
+            : $this->resolve(new IconReference($name, $family, $style, $version));
     }
 
     /**
      * Resolves many icons in as few API requests as possible: one batched query for
      * the primary references, plus at most one more for the brands fallbacks.
      *
-     * @param  iterable<array{name:string,family?:?string,style?:?string}>  $entries
+     * @param  iterable<array{name:string,family?:?string,style?:?string,version?:int|string|null}>  $entries
      * @return list<bool> whether each entry resolved, in input order
      */
     public function warm(iterable $entries): array
@@ -84,6 +89,7 @@ class FontAwesome
                 strtolower(trim($entry['name'])),
                 $entry['family'] ?? null,
                 $entry['style'] ?? null,
+                $entry['version'] ?? null,
             );
         }
 
@@ -137,7 +143,7 @@ class FontAwesome
 
         foreach ($plans as $i => $plan) {
             if (! $resolved[$i] && $plan['custom'] !== null) {
-                $resolved[$i] = $this->custom($plan['custom'], $plan['style']) !== null;
+                $resolved[$i] = $this->custom($plan['custom'], $plan['style'], $plan['version']) !== null;
             }
         }
 
@@ -149,10 +155,10 @@ class FontAwesome
         $this->sources->add($source);
     }
 
-    public function render(string $name, ?string $family = null, ?string $style = null, ComponentAttributeBag|array|null $attributes = null, ?string $mode = null): HtmlString
+    public function render(string $name, ?string $family = null, ?string $style = null, ComponentAttributeBag|array|null $attributes = null, ?string $mode = null, int|string|null $version = null): HtmlString
     {
         $mode = $this->mode($mode);
-        $located = $this->locate($name, $family, $style);
+        $located = $this->locate($name, $family, $style, $version);
 
         $svg = match (true) {
             $located === null => $this->handleMissing($name),
@@ -173,14 +179,25 @@ class FontAwesome
         };
     }
 
+    private function version(int|string|null $version): string
+    {
+        $version = blank($version) ? $this->defaultVersion : trim((string) $version);
+
+        if ($version !== $this->defaultVersion && ! in_array($version, $this->versions, true)) {
+            throw new \InvalidArgumentException("Font Awesome version [{$version}] is not listed in fontawesome.versions.");
+        }
+
+        return $version;
+    }
+
     /**
      * Mirrors get(), keeping the reference that answered so it can be turned into a URL.
      *
      * @return array{svg:string,ref:IconReference}|null
      */
-    private function locate(string $name, ?string $family, ?string $style): ?array
+    private function locate(string $name, ?string $family, ?string $style, int|string|null $version): ?array
     {
-        $plan = $this->plan(strtolower(trim($name)), $family, $style);
+        $plan = $this->plan(strtolower(trim($name)), $family, $style, $version);
 
         foreach (['primary', 'fallback'] as $phase) {
             $ref = $plan[$phase];
@@ -198,11 +215,11 @@ class FontAwesome
             return null;
         }
 
-        $svg = $this->custom($plan['custom'], $plan['style']);
+        $svg = $this->custom($plan['custom'], $plan['style'], $plan['version']);
 
         return $svg === null
             ? null
-            : ['svg' => $svg, 'ref' => $this->reference($plan['custom'], 'custom', $plan['style'])];
+            : ['svg' => $svg, 'ref' => $this->reference($plan['custom'], 'custom', $plan['style'], $plan['version'])];
     }
 
     /**
@@ -218,9 +235,9 @@ class FontAwesome
             . '</svg>';
     }
 
-    private function custom(string $name, ?string $style): ?string
+    private function custom(string $name, ?string $style, string $version): ?string
     {
-        $ref = $this->reference($name, 'custom', $style);
+        $ref = $this->reference($name, 'custom', $style, $version);
         $memoKey = $ref->key();
         if (array_key_exists($memoKey, $this->memo)) {
             return $this->memo[$memoKey];
@@ -304,7 +321,7 @@ class FontAwesome
 
     private function persist(IconReference $ref, string $html): string
     {
-        $svg = $this->canvas->square($this->sanitizer->sanitize($html));
+        $svg = $this->canvas->square($this->sanitizer->sanitize($html), $ref->version);
         $this->store->put($ref, $svg);
         $this->cache->put($ref, $svg);
 
@@ -335,46 +352,50 @@ class FontAwesome
      * The reference to try first, an optional brands fallback, and the custom-source
      * name to fall through to.
      *
-     * @return array{primary:?IconReference,fallback:?IconReference,custom:?string,style:?string}
+     * @return array{primary:?IconReference,fallback:?IconReference,custom:?string,style:?string,version:string}
      */
-    private function plan(string $name, ?string $family, ?string $style): array
+    private function plan(string $name, ?string $family, ?string $style, int|string|null $version): array
     {
         $family = blank($family) ? null : $family;
         $style = blank($style) ? null : $style;
+        $version = $this->version($version);
 
         if (str_starts_with($name, 'c-')) {
-            return ['primary' => null, 'fallback' => null, 'custom' => substr($name, 2), 'style' => $style];
+            return ['primary' => null, 'fallback' => null, 'custom' => substr($name, 2), 'style' => $style, 'version' => $version];
         }
 
         $explicit = $family !== null || $style !== null;
 
         if (! $explicit && in_array($name, $this->brands, true)) {
             return [
-                'primary' => new IconReference($name, 'classic', 'brands'),
+                'primary' => new IconReference($name, 'classic', 'brands', $version),
                 'fallback' => null,
                 'custom' => $name,
                 'style' => $style,
+                'version' => $version,
             ];
         }
 
-        $ref = $this->reference($name, $family, $style);
+        $ref = $this->reference($name, $family, $style, $version);
 
         return [
             'primary' => $ref,
             'fallback' => ! $explicit && $ref->style !== 'brands'
-                ? new IconReference($name, 'classic', 'brands')
+                ? new IconReference($name, 'classic', 'brands', $version)
                 : null,
             'custom' => $name,
             'style' => $style,
+            'version' => $version,
         ];
     }
 
-    private function reference(string $name, ?string $family, ?string $style): IconReference
+    private function reference(string $name, ?string $family, ?string $style, string $version): IconReference
     {
         return new IconReference(
             $name,
             strtolower(trim($family ?? $this->defaultFamily)),
             strtolower(trim($style ?? $this->defaultStyle)),
+            $version,
         );
     }
 }

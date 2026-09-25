@@ -7,15 +7,16 @@ beforeEach(function () {
     Storage::fake('local');
     config()->set('fontawesome.disk', 'local');
     Http::fake(function ($request) {
-        $variables = json_decode($request->body(), true)['variables'] ?? [];
-        $release = [];
-        foreach ($variables as $key => $value) {
-            if (str_starts_with($key, 'name')) {
-                $release['i' . substr($key, 4)] = ['svgs' => [['html' => '<svg/>']]];
-            }
+        $query = json_decode($request->body(), true)['query'] ?? '';
+        preg_match_all('/(r\d+): release\(.*?\n  \}/s', $query, $blocks, PREG_SET_ORDER);
+
+        $data = [];
+        foreach ($blocks as [$block, $release]) {
+            preg_match_all('/(i\d+): icon/', $block, $aliases);
+            $data[$release] = array_fill_keys($aliases[1], ['svgs' => [['html' => '<svg/>']]]);
         }
 
-        return Http::response(['data' => ['release' => $release]]);
+        return Http::response(['data' => $data]);
     });
 });
 
@@ -70,3 +71,26 @@ it('warms every icon in a single request', function () {
         Storage::disk('local')->assertExists("fontawesome/7/classic/solid/{$name}.svg");
     }
 });
+
+it('prefetches version overrides from config entries and scanned usages', function () {
+    $views = sys_get_temp_dir() . '/fa-views-' . uniqid();
+    mkdir($views);
+    file_put_contents($views . '/page.blade.php', '<x-fa name="gear" version="6" /> <x-fa name="gear" />');
+
+    config()->set('fontawesome.versions', [6]);
+    config()->set('fontawesome.scan_paths', [$views]);
+    config()->set('fontawesome.prefetch', [['name' => 'star', 'version' => 6]]);
+
+    $this->artisan('fontawesome:prefetch')->assertSuccessful();
+
+    Http::assertSentCount(1);
+    Storage::disk('local')->assertExists('fontawesome/6/classic/solid/gear.svg');
+    Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
+    Storage::disk('local')->assertExists('fontawesome/6/classic/solid/star.svg');
+});
+
+it('fails on a version missing from the allowlist', function () {
+    config()->set('fontawesome.prefetch', [['name' => 'gear', 'version' => 5]]);
+
+    $this->artisan('fontawesome:prefetch');
+})->throws(InvalidArgumentException::class, 'Font Awesome version [5] is not listed in fontawesome.versions.');

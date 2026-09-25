@@ -17,7 +17,6 @@ class IconCache
         private ?int $ttl,
         private int $negativeTtl,
         private string $prefix,
-        private int|string $version,
     ) {}
 
     public function enabled(): bool
@@ -113,7 +112,7 @@ class IconCache
 
     private function key(IconReference $ref): string
     {
-        return "{$this->prefix}{$this->version}:{$ref->key()}";
+        return "{$this->prefix}{$ref->key()}";
     }
 
     private function registryKey(): string

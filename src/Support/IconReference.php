@@ -8,10 +8,11 @@ final class IconReference
         public readonly string $name,
         public readonly string $family,
         public readonly string $style,
+        public readonly string $version,
     ) {}
 
     public function key(): string
     {
-        return "{$this->family}/{$this->style}/{$this->name}";
+        return "{$this->version}/{$this->family}/{$this->style}/{$this->name}";
     }
 }
