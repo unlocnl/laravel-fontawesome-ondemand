@@ -233,14 +233,36 @@ class FontAwesomeClient implements IconFetcher
         return $timestamp === false ? null : max(0, $timestamp - time()) * 1000;
     }
 
+    /**
+     * Scopes granted to the configured API token; `svg_icons_pro` marks Pro access.
+     *
+     * @return list<string>
+     *
+     * @throws IconFetchFailedException
+     */
+    public function scopes(): array
+    {
+        return $this->exchange()['scopes'] ?? [];
+    }
+
     /** @throws IconFetchFailedException */
     private function accessToken(): ?string
+    {
+        return $this->exchange()['token'] ?? null;
+    }
+
+    /**
+     * @return array{token:string,scopes:list<string>}|null
+     *
+     * @throws IconFetchFailedException
+     */
+    private function exchange(): ?array
     {
         if ($this->apiToken === null || $this->apiToken === '') {
             return null;
         }
 
-        $key = 'fontawesome:access_token:' . md5($this->apiToken);
+        $key = 'fontawesome:access_token:v2:' . md5($this->apiToken);
         if ($cached = $this->cache->get($key)) {
             return $cached;
         }
@@ -252,9 +274,11 @@ class FontAwesomeClient implements IconFetcher
             throw new IconFetchFailedException('Token exchange returned no access_token.');
         }
 
-        $expires = (int) ($json['expires_in'] ?? $json['expires_within_seconds'] ?? 3600);
-        $this->cache->put($key, $token, max(60, $expires - 60));
+        $exchange = ['token' => $token, 'scopes' => array_values((array) ($json['scopes'] ?? []))];
 
-        return $token;
+        $expires = (int) ($json['expires_in'] ?? $json['expires_within_seconds'] ?? 3600);
+        $this->cache->put($key, $exchange, max(60, $expires - 60));
+
+        return $exchange;
     }
 }

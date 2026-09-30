@@ -45,6 +45,27 @@ it('exchanges the api token once and reuses it', function () use ($ref) {
     Http::assertSent(fn ($r) => $r->url() === 'https://api.fontawesome.com' && $r->hasHeader('Authorization', 'Bearer ACCESS'));
 });
 
+it('reports the scopes granted by the token exchange, reusing it for fetches', function () use ($ref) {
+    Http::fake([
+        'api.fontawesome.com/token' => Http::response(['access_token' => 'ACCESS', 'scopes' => ['public', 'svg_icons_pro']]),
+        'api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg/>']]]]]]),
+    ]);
+
+    $client = client('API_TOKEN');
+
+    expect($client->scopes())->toBe(['public', 'svg_icons_pro']);
+    $client->fetch($ref());
+
+    Http::assertSentCount(2);
+});
+
+it('reports no scopes without a token', function () {
+    Http::fake();
+
+    expect(client()->scopes())->toBe([]);
+    Http::assertNothingSent();
+});
+
 it('maps kebab-case families to the graphql enum', function () {
     Http::fake(['api.fontawesome.com' => Http::response(['data' => ['r0' => ['i0' => ['svgs' => [['html' => '<svg/>']]]]]])]);
 

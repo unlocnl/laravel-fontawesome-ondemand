@@ -3,7 +3,9 @@
 namespace Unloc\FontAwesome\Console;
 
 use Illuminate\Console\Command;
+use Unloc\FontAwesome\Exceptions\IconFetchFailedException;
 use Unloc\FontAwesome\FontAwesome;
+use Unloc\FontAwesome\Http\FontAwesomeClient;
 
 class PrefetchCommand extends Command
 {
@@ -13,8 +15,10 @@ class PrefetchCommand extends Command
 
     private int $skipped = 0;
 
-    public function handle(FontAwesome $fontawesome): int
+    public function handle(FontAwesome $fontawesome, FontAwesomeClient $client): int
     {
+        $this->reportToken($client);
+
         $results = $fontawesome->warm($this->entries());
 
         $warmed = count(array_filter($results));
@@ -23,6 +27,37 @@ class PrefetchCommand extends Command
         $this->info("Font Awesome prefetch: {$warmed} warmed, {$failed} failed, {$this->skipped} dynamic skipped.");
 
         return self::SUCCESS;
+    }
+
+    private function reportToken(FontAwesomeClient $client): void
+    {
+        if (config('fontawesome.source') === 'cdn') {
+            $this->line('Font Awesome source is cdn: API token unused, free icons only.');
+
+            return;
+        }
+
+        if (! config('fontawesome.api_token')) {
+            $this->warn('No Font Awesome API token configured: free icons only. Set FONTAWESOME_API_TOKEN for Pro.');
+
+            return;
+        }
+
+        try {
+            $scopes = $client->scopes();
+        } catch (IconFetchFailedException $e) {
+            $this->error("Font Awesome API token rejected: {$e->getMessage()}");
+
+            return;
+        }
+
+        if (! in_array('svg_icons_pro', $scopes, true)) {
+            $this->warn('Font Awesome API token works but has no Pro access: free icons only.');
+
+            return;
+        }
+
+        $this->info('Font Awesome API token verified: Pro access.');
     }
 
     /** @return list<array{name:string,family?:string,style?:string,version?:int|string}> */
