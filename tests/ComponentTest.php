@@ -93,8 +93,8 @@ it('fetches an allowlisted version override from its own release and store', fun
     $six = \Unloc\FontAwesome\Facades\FontAwesome::get('gear', version: 6);
     $seven = \Unloc\FontAwesome\Facades\FontAwesome::get('gear');
 
-    expect($six)->toContain('viewBox="0 0 1 1"')
-        ->and($seven)->toContain('viewBox="-0.125 -0.125 1.25 1.25"');
+    expect($six)->toContain('viewBox="0 0 1 1"')->not->toContain('overflow=')
+        ->and($seven)->toContain('viewBox="0 0 1 1" overflow="visible"');
     Http::assertSent(fn ($r) => $r['variables']['version0'] === '6.x');
     Http::assertSent(fn ($r) => $r['variables']['version0'] === '7.x');
     Storage::disk('local')->assertExists('fontawesome/6/classic/solid/gear.svg');
