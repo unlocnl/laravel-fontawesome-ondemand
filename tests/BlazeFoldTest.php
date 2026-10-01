@@ -66,6 +66,16 @@ it('does not bake an on_error result into the compiled template', function () {
         ->and($compiled)->toContain('pushData');
 });
 
+it('folds a blank name to nothing', function () {
+    Http::fake();
+
+    $compiled = Blade::compileString('<x-fa name="" class="text-red-500" />');
+
+    expect($compiled)->not->toContain('<svg')
+        ->and($compiled)->not->toContain('pushData');
+    Http::assertNothingSent();
+});
+
 it('registers the component with blaze by default', function () {
     expect(app('blaze')->optimize()->shouldFold(componentPath()))->toBeTrue();
 });

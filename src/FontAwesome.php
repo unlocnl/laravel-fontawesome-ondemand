@@ -57,8 +57,12 @@ class FontAwesome
         private array $versions = [],
     ) {}
 
-    public function get(string $name, ?string $family = null, ?string $style = null, int|string|null $version = null): ?string
+    public function get(?string $name, ?string $family = null, ?string $style = null, int|string|null $version = null): ?string
     {
+        if (blank($name)) {
+            return null;
+        }
+
         return $this->locate($name, $family, $style, $version)['svg'] ?? null;
     }
 
@@ -155,8 +159,12 @@ class FontAwesome
         $this->sources->add($source);
     }
 
-    public function render(string $name, ?string $family = null, ?string $style = null, ComponentAttributeBag|array|null $attributes = null, ?string $mode = null, int|string|null $version = null): HtmlString
+    public function render(?string $name, ?string $family = null, ?string $style = null, ComponentAttributeBag|array|null $attributes = null, ?string $mode = null, int|string|null $version = null): HtmlString
     {
+        if (blank($name)) {
+            return new HtmlString('');
+        }
+
         $mode = $this->mode($mode);
         $located = $this->locate($name, $family, $style, $version);
 

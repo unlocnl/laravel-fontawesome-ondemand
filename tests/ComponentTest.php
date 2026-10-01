@@ -18,6 +18,13 @@ it('renders the x-fa component with merged classes and attributes', function () 
         ->toContain('aria-hidden="true"');
 });
 
+it('renders nothing for a blank or null name', function (string $template) {
+    Http::fake();
+
+    expect(trim(Blade::render($template, ['icon' => null])))->toBe('');
+    Http::assertNothingSent();
+})->with(['<x-fa name="" />', '<x-fa :name="$icon" />']);
+
 it('resolves the facade to the manager', function () {
     expect(\Unloc\FontAwesome\Facades\FontAwesome::get('gear'))->toContain('<svg');
 });

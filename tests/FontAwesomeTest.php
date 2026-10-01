@@ -147,6 +147,14 @@ it('honours on_error once folding has finished', function () {
     expect((string) $manager->render('nope', 'classic', 'solid'))->toBe('');
 });
 
+it('renders nothing for a blank name without fetching, whatever on_error says', function (?string $name, string $onError) {
+    Http::fake();
+
+    expect((string) manager($onError, isFolding: fn () => true)->render($name))->toBe('')
+        ->and(manager($onError)->get($name))->toBeNull();
+    Http::assertNothingSent();
+})->with([null, '', '  '])->with(['placeholder', 'throw', 'empty']);
+
 it('merges default classes and bag class into a hit', function () {
     fakeIcon('<svg viewBox="0 0 1 1"><path/></svg>');
     $out = (string) manager()->render('gear', null, null, ['class' => 'text-red-500']);

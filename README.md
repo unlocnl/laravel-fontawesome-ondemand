@@ -69,7 +69,7 @@ All keys live in `config/fontawesome.php`.
 <x-fa name="github" /> {{-- brand auto-resolved --}}
 ```
 
-`name` is required; `family` and `variant` fall back to `defaults.family`/`defaults.style` when omitted. Any other attributes (including `class` and `style`) are merged onto the rendered `<svg>` root element — default classes, existing SVG classes, and attribute classes are combined and deduplicated.
+`name` is required; a blank or `null` value renders nothing, whatever `on_error` says, so `<x-fa :name="$item->icon" />` needs no `@if` guard. `family` and `variant` fall back to `defaults.family`/`defaults.style` when omitted. Any other attributes (including `class` and `style`) are merged onto the rendered `<svg>` root element — default classes, existing SVG classes, and attribute classes are combined and deduplicated.
 
 Brand icons (`github`, `square-github`, `gitlab`, `google`, `php`, `laravel`, ...) are recognized from the complete bundled brand list in `resources/brands.php` — all Font Awesome brand names, including the `square-*` variants — and resolved directly against the classic family with the `brands` style (`classic`/`brands`) in a single query, without needing to pass a family or style. Any name not in the list (e.g. a brand added in a newer release) still resolves via an automatic `classic`/`brands` fallback — just with one extra request on first fetch. The list is a first-fetch optimization only. Regenerate it against the latest release with:
 
