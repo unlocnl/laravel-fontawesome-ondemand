@@ -34,6 +34,36 @@ it('is idempotent', function () {
         ->toBe('<svg viewBox="0 0 512 512" overflow="visible"></svg>');
 });
 
+it('centers a glyph cropped to its own bounds on both axes', function () {
+    expect((new SvgCanvas())->square('<svg viewBox="0 0 576 571"></svg>', '7'))
+        ->toBe('<svg viewBox="32 29.5 512 512" overflow="visible"></svg>');
+});
+
+it('maps the full canvas onto the grid', function () {
+    expect((new SvgCanvas())->square('<svg viewBox="0 0 640 640"></svg>', '7'))
+        ->toBe('<svg viewBox="64 64 512 512" overflow="visible"></svg>');
+});
+
+it('keeps the viewBox origin', function () {
+    expect((new SvgCanvas())->square('<svg viewBox="10 -20 448 512"></svg>', '7'))
+        ->toBe('<svg viewBox="-22 -20 512 512" overflow="visible"></svg>');
+});
+
+it('reads a comma separated viewBox', function () {
+    expect((new SvgCanvas())->square('<svg viewBox="0,0,448,512"></svg>', '7'))
+        ->toBe('<svg viewBox="-32 0 512 512" overflow="visible"></svg>');
+});
+
+it('keeps an existing overflow', function () {
+    expect((new SvgCanvas())->square('<svg viewBox="0 0 448 512" overflow="hidden"></svg>', '7'))
+        ->toBe('<svg viewBox="-32 0 512 512" overflow="hidden"></svg>');
+});
+
+it('leaves a glyph taller than the canvas alone', function () {
+    expect((new SvgCanvas())->square('<svg viewBox="0 0 512 700"></svg>', '7'))
+        ->toBe('<svg viewBox="0 0 512 700"></svg>');
+});
+
 it('leaves a glyph wider than the canvas alone', function () {
     expect((new SvgCanvas())->square('<svg viewBox="0 0 700 512"></svg>', '7'))
         ->toBe('<svg viewBox="0 0 700 512"></svg>');

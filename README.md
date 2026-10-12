@@ -170,7 +170,7 @@ Return raw SVG markup or `null`; the package sanitizes and merges attributes for
 
 Custom SVGs are inlined verbatim next to Font Awesome ones and get the same `classes` merged onto the root, so they only look right if they are drawn on comparable terms.
 
-1. **Draw on Font Awesome's canvas.** Custom icons keep the `viewBox` they are authored with, so match the one Font Awesome icons render with (see [Icon canvas](#icon-canvas)). On version 7 that is `viewBox="0 0 512 512"` with the glyph centered on the grid, plus `overflow="visible"` on the root when the art leaves the grid. On version 6 it is a 512-tall grid with the width trimmed to the glyph — `0 0 512 512` for `house`, `0 0 448 512` for `user` — and the default square `w-[1em] h-[1em]` centers a narrower glyph rather than stretching it.
+1. **Draw on Font Awesome's canvas.** On version 7, draw on a 640×640 canvas with Font Awesome's 512-unit grid centered on it, size the art against Font Awesome glyphs placed on the same canvas, and export the whole canvas (`viewBox="0 0 640 640"`). The package centers a custom icon's `viewBox` on the grid with visible overflow, like a Font Awesome icon (see [Icon canvas](#icon-canvas)), so `0 0 640 640` becomes `64 64 512 512` and the art keeps the position it was drawn at. An export cropped to the art (a design tool's "export selection") still renders at Font Awesome's scale, but centered on its own bounds on both axes, which moves art drawn off-center. Either way the units are Font Awesome's: a `0 0 24 24` icon renders at 24/512 of the box. A `viewBox` over 640 units in either dimension is left as authored. On version 6 custom icons keep their own `viewBox`, so match Font Awesome's: a 512-tall grid with the width trimmed to the glyph — `0 0 512 512` for `house`, `0 0 448 512` for `user` — which the default square `w-[1em] h-[1em]` centers rather than stretches.
 2. **Always include `viewBox`; drop `width` and `height`.** Without a `viewBox` the sizing classes scale the viewport and not the artwork. Width and height attributes survive the merge and only add noise.
 3. **Never hardcode a color, unless the color is the icon.** Omit `fill` or set `fill="currentColor"`. A literal `fill="#f00"` on a child path outranks the root's inherited `fill-current`, so `text-*` utilities will not recolor it. Stroke-drawn icons need `stroke="currentColor"` and `fill="none"`. The exception is a brand mark whose color is part of the identity, or a multi-color logo that cannot be a single path — there, per-path fills are the right answer, and that same cascade rule is what keeps a stray `text-*` from breaking the mark. Font Awesome's own `brands` style is not this case: `spotify` and `google` both ship as one `currentColor` path and follow the text color like any other glyph.
 4. **Leave `class` off the root.** Classes are merged, not replaced — a root `class="w-6 h-6"` ends up alongside the default `w-[1em] h-[1em]` and stylesheet order decides the winner, not your markup. Pass per-usage classes on the component instead.
@@ -179,7 +179,7 @@ Custom SVGs are inlined verbatim next to Font Awesome ones and get the same `cla
 A well-formed custom icon is a root tag and paths, nothing else:
 
 ```svg
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M256 32 64 480h384L256 32z"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"><path d="M320 96 128 544h384L320 96z"/></svg>
 ```
 
 Exports from design tools usually carry inline `style` attributes and editor metadata; `sanitize.remove_attributes` strips those on the way in.
@@ -192,7 +192,7 @@ Custom icons are not written to the on-disk store, because the folder or the dat
 
 ### Icon canvas
 
-Version 7 icons are stored on a square grid with visible overflow. Both the API and the CDN serve a `viewBox` trimmed to the 512-unit grid (`0 0 448 512` for `check`), which official glyphs overflow into Font Awesome's 640-unit canvas, so a `w-[1em] h-[1em]` box would clip them. The package centers the glyph on a square 512-unit `viewBox` (`-32 0 512 512`) and adds `overflow="visible"`: the grid fills the box at the scale Font Awesome renders it, and what lies outside the grid draws past the box instead of being cut off. A 576-wide glyph extends 0.0625em past each side of a square `1em` box, a 640-wide glyph 0.125em, so leave that room where icons sit inside `overflow: hidden` or against a neighbor. Version 6 icons and custom icons keep their own `viewBox`.
+Version 7 icons are stored on a square grid with visible overflow. Both the API and the CDN serve a `viewBox` trimmed to the 512-unit grid (`0 0 448 512` for `check`), which official glyphs overflow into Font Awesome's 640-unit canvas, so a `w-[1em] h-[1em]` box would clip them. The package centers the glyph on a square 512-unit `viewBox` (`-32 0 512 512`) and adds `overflow="visible"`: the grid fills the box at the scale Font Awesome renders it, and what lies outside the grid draws past the box instead of being cut off. A 576-wide glyph extends 0.0625em past each side of a square `1em` box, a 640-wide glyph 0.125em, so leave that room where icons sit inside `overflow: hidden` or against a neighbor. Version 7 custom icons get the same treatment, centered on both axes (see [Authoring](#authoring)). Version 6 icons keep their own `viewBox`.
 
 ### Facade
 

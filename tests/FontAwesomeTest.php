@@ -47,9 +47,9 @@ function fakeMissing(): void
 }
 
 it('fetches, sanitizes, stores on a miss', function () {
-    fakeIcon('<svg viewBox="0 0 1 1"><!--!FA--><path/></svg>');
+    fakeIcon('<svg viewBox="0 0 512 512"><!--!FA--><path/></svg>');
     $svg = manager()->get('gear');
-    expect($svg)->toBe('<svg viewBox="0 0 1 1" overflow="visible"><path/></svg>');
+    expect($svg)->toBe('<svg viewBox="0 0 512 512" overflow="visible"><path/></svg>');
     Storage::disk('local')->assertExists('fontawesome/7/classic/solid/gear.svg');
 });
 
@@ -251,6 +251,14 @@ it('sanitizes and merges attributes onto a custom icon', function () {
 
     expect($out)->not->toContain('<!--')
         ->and($out)->toContain('class="w-4 h-4 text-red-500"');
+});
+
+it('centers a custom icon on the grid', function () {
+    Http::fake();
+    $source = new RecordingIconSource(['bedroom' => '<svg viewBox="0 0 576 571"><path/></svg>']);
+
+    expect(manager(sources: new IconSourceChain([$source]))->get('c-bedroom'))
+        ->toBe('<svg viewBox="32 29.5 512 512" overflow="visible"><path/></svg>');
 });
 
 it('memoizes a custom icon within a single request', function () {

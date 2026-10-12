@@ -265,7 +265,7 @@ class FontAwesome
             return $this->memo[$memoKey] = null;
         }
 
-        $svg = $this->sanitizer->sanitize($raw);
+        $svg = $this->canvas->square($this->sanitizer->sanitize($raw), $ref->version);
         $this->cache->put($ref, $svg);
 
         return $this->memo[$memoKey] = $svg;

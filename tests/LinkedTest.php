@@ -73,11 +73,11 @@ it('points a brand icon at the reference that actually answered', function () {
 
 it('points a custom icon at the custom family', function () {
     fakeLinkedIcon(null);
-    config()->set('fontawesome.custom.path', linkedCustomIconPath('<svg viewBox="0 0 24 24"><path/></svg>'));
+    config()->set('fontawesome.custom.path', linkedCustomIconPath('<svg viewBox="0 0 448 512"><path/></svg>'));
 
     expect(Blade::render('<x-fa name="c-logo" mode="linked" />'))
         ->toContain('/fontawesome/7/custom/solid/logo.svg#i')
-        ->toContain('viewBox="0 0 24 24"');
+        ->toContain('viewBox="-32 0 512 512" overflow="visible"');
 });
 
 it('falls back to an inline placeholder when the icon is missing', function () {
